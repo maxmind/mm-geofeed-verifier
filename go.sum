@@ -1,0 +1,8 @@
+github.com/oschwald/geoip2-golang v1.3.0 h1:D+Hsdos1NARPbzZ2aInUHZL+dApIzo8E0ErJVsWcku8=
+github.com/oschwald/geoip2-golang v1.3.0/go.mod h1:0LTTzix/Ao1uMvOhAV4iLU0Lz7eCrP94qZWBTDKf0iE=
+github.com/oschwald/maxminddb-golang v1.5.0 h1:rmyoIV6z2/s9TCJedUuDiKht2RN12LWJ1L7iRGtWY64=
+github.com/oschwald/maxminddb-golang v1.5.0/go.mod h1:3jhIUymTJ5VREKyIhWm66LJiQt04F0UCDdodShpjWsY=
+github.com/yunabe/easycsv v0.0.0-20190331142847-4a4a293d6ebc h1:GBEA0BaSt5wIrlk8TEGgoPflMzyG35KBudtqFXDCSTk=
+github.com/yunabe/easycsv v0.0.0-20190331142847-4a4a293d6ebc/go.mod h1:C2jL0LGQdwKdeXN5qV+7M6+PHrr0qY84cKU27spNPiA=
+golang.org/x/sys v0.0.0-20190919044723-0c1ff786ef13 h1:/zi0zzlPHWXYXrO1LjNRByFu8sdGgCkj2JLDdBIB84k=
+golang.org/x/sys v0.0.0-20190919044723-0c1ff786ef13/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
