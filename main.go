@@ -5,22 +5,38 @@ package main
 // or to be worse. This script can help us work that out. Right now, it only looks
 // at the ISO country code, but checking more fields should be easy enough.
 import (
+    "flag"
 	"fmt"
 	"github.com/oschwald/geoip2-golang"
 	"github.com/yunabe/easycsv"
 	"log"
 	"net"
-	"os"
 	"strings"
 )
 
 // Usage Example:
 // go run go/check_csv_corrections/main.go /path/to/corrections.csv /path/to/mmdbfile.mmdb
 func main() {
-	csvFilename := os.Args[1]
-	mmdbFilename := os.Args[2]
+    csvFilename := flag.String(
+        "geofeed-path",
+        "",
+        "Path to the local geofeed file to verify",
+    )
 
-	db, err := geoip2.Open(mmdbFilename)
+    mmdbFilename := flag.String(
+        "mmdb-path",
+        "/usr/local/share/GeoIP/GeoIP2-City.mmdb",
+        "Path to MMDB file to compare geofeed file against",
+    )
+
+    flag.Parse()
+
+    if ( *csvFilename == "" ) {
+        err := "'--geofeed-path' is required, and should be a path to a local geofeed file"
+        log.Fatal(err)
+    }
+
+	db, err := geoip2.Open(*mmdbFilename)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -30,7 +46,7 @@ func main() {
 	opt := easycsv.Option{
 		Comment: '#',
 	}
-	r := easycsv.NewReaderFile(csvFilename, opt)
+	r := easycsv.NewReaderFile(*csvFilename, opt)
 	err = r.Loop(func(entry *struct {
 		Subnet  string `index:"0"`
 		Country string `index:"1"`
