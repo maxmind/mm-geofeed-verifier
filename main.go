@@ -31,7 +31,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer func() {
-		if err := db.Close; err != nil {
+		if err := db.Close(); err != nil {
 			log.Fatal(err)
 		}
 	}()
