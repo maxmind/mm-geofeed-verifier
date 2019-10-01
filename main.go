@@ -91,11 +91,8 @@ func verifyCorrection(correction []string, db *geoip2.Reader ) (int) {
     if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) ||
        !(strings.EqualFold(correction[2], mmdbRecord.City.Names["en"])) {
         firstSubdivision := ""
-        for i, sd := range mmdbRecord.Subdivisions {
-            if i == 0 {
-                firstSubdivision = sd.IsoCode
-                break
-            }
+        if len(record.Subdivisions) > 0 {
+            firstSubdivision = record.Subdivisions[0].IsoCode
         }
         fmt.Printf(
             "Found a potential improvement: %v, current country: '%v',suggested country: '%v', current city: '%v', suggested city: '%v', current region: '%v', suggested region: '%v,'\n",
