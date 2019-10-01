@@ -30,7 +30,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+    defer func() {
+        if err := db.Close; err != nil {
+            log.Fatal(err)
+        }
+    }()
 
 	totalCount, correctionCount := 0, 0
     geofeedFH, err := os.Open(geofeedFilename)
@@ -42,7 +46,12 @@ func main() {
     csvReader.Comment = '#'
     csvReader.FieldsPerRecord = 5
     csvReader.TrimLeadingSpace = true
-    defer geofeedFH.Close()
+    defer func() {
+        if err := geofeedFH.Close(); err != nil {
+            log.Fatal(err)
+        }
+    }()
+
 
     for {
         row, err := csvReader.Read()
