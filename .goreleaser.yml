@@ -1,4 +1,3 @@
-project_name: 'mm-geofeed-verifier'
 archive:
     wrap_in_directory: true
     replacements:
@@ -14,5 +13,3 @@ archive:
         - README.md
 checksum:
   name_template: 'checksums.txt'
-snapshot:
-  name_template: "{{ .Tag }}-next"
