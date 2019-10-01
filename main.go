@@ -52,6 +52,7 @@ func main() {
         if err != nil {
             log.Fatal(err)
         }
+        totalCount++
         correctionCount += verifyCorrection(row, db)
     }
 	if (err != nil && err != io.EOF) {
@@ -91,8 +92,8 @@ func verifyCorrection(correction []string, db *geoip2.Reader ) (int) {
     if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) ||
        !(strings.EqualFold(correction[2], mmdbRecord.City.Names["en"])) {
         firstSubdivision := ""
-        if len(record.Subdivisions) > 0 {
-            firstSubdivision = record.Subdivisions[0].IsoCode
+        if len(mmdbRecord.Subdivisions) > 0 {
+            firstSubdivision = mmdbRecord.Subdivisions[0].IsoCode
         }
         fmt.Printf(
             "Found a potential improvement: %s, current country: '%s',suggested country: '%s', current city: '%s', suggested city: '%s', current region: '%s', suggested region: '%s,'\n",
