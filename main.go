@@ -37,7 +37,7 @@ func main() {
     }()
 
 	totalCount, correctionCount := 0, 0
-    geofeedFH, err := os.Open(geofeedFilename)
+    geofeedFH, err := os.Open(geofeedFilename) //nolint: gosec //linter doesn't realize we are cleaning the filepath
     if err != nil {
         log.Fatal(err)
     }
