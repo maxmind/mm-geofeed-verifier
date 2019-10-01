@@ -55,10 +55,10 @@ func main() {
         correctionCount += verifyCorrection(row, db)
     }
 	if (err != nil && err != io.EOF) {
-		log.Fatalf("Failed to read file: %v", err)
+		log.Fatalf("Failed to read file: %s", err)
 	}
 	fmt.Printf(
-        "\nOut of %v potential corrections, %v may be different than our current mappings\n",
+        "\nOut of %d potential corrections, %d may be different than our current mappings\n",
         totalCount,
         correctionCount,
     )
@@ -95,7 +95,7 @@ func verifyCorrection(correction []string, db *geoip2.Reader ) (int) {
             firstSubdivision = record.Subdivisions[0].IsoCode
         }
         fmt.Printf(
-            "Found a potential improvement: %v, current country: '%v',suggested country: '%v', current city: '%v', suggested city: '%v', current region: '%v', suggested region: '%v,'\n",
+            "Found a potential improvement: %s, current country: '%s',suggested country: '%s', current city: '%s', suggested city: '%s', current region: '%s', suggested region: '%s,'\n",
             networkOrIP,
             mmdbRecord.Country.IsoCode,
             correction[1],
