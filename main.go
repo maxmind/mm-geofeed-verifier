@@ -32,7 +32,7 @@ func main() {
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 	}()
 
@@ -48,7 +48,7 @@ func main() {
 	csvReader.TrimLeadingSpace = true
 	defer func() {
 		if err := geofeedFH.Close(); err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 	}()
 
