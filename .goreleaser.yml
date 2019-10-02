@@ -1,3 +1,8 @@
+builds:
+    - goos:
+        - darwin
+        - linux
+        - windows
 archive:
     wrap_in_directory: true
     replacements:
