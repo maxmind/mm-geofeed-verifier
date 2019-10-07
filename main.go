@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/oschwald/geoip2-golang"
+	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
 // Usage Example:
@@ -37,7 +37,7 @@ func main() {
 	}()
 
 	totalCount, correctionCount := 0, 0
-	geofeedFH, err := os.Open(geofeedFilename) //nolint: gosec //linter doesn't realize we are cleaning the filepath
+	geofeedFH, err := os.Open(geofeedFilename) //nolint: gosec // linter doesn't realize we are cleaning the filepath
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -58,10 +58,16 @@ func main() {
 			break
 		}
 		if err != nil {
+			geofeedFH.Close() //nolint: gosec, errcheck
 			log.Fatal(err)
 		}
 		totalCount++
-		correctionCount += verifyCorrection(row, db)
+		currentCorrectionCount, err := verifyCorrection(row, db)
+		if err != nil {
+			geofeedFH.Close() //nolint: gosec, errcheck
+			log.Fatal(err)
+		}
+		correctionCount += currentCorrectionCount
 	}
 	if err != nil && err != io.EOF {
 		log.Fatalf("Failed to read file: %s", err)
@@ -73,7 +79,7 @@ func main() {
 	)
 }
 
-func verifyCorrection(correction []string, db *geoip2.Reader) int {
+func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 	/*
 	   0: network (CIDR or single IP)
 	   1: ISO-3166 country code
@@ -91,11 +97,11 @@ func verifyCorrection(correction []string, db *geoip2.Reader) int {
 	}
 	network, _, err := net.ParseCIDR(networkOrIP)
 	if err != nil {
-		log.Fatal(err)
+		return 0, err
 	}
 	mmdbRecord, err := db.City(network)
 	if err != nil {
-		log.Fatal(err)
+		return 0, err
 	}
 	if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) ||
 		!(strings.EqualFold(correction[2], mmdbRecord.City.Names["en"])) {
@@ -113,9 +119,9 @@ func verifyCorrection(correction []string, db *geoip2.Reader) int {
 			firstSubdivision,
 			correction[2],
 		)
-		return 1
+		return 1, nil
 	}
-	return 0
+	return 0, nil
 }
 
 func parseArgs() (string, string, error) {
