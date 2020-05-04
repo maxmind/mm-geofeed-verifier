@@ -1,0 +1,47 @@
+[run]
+  timeout = "1m"
+
+  tests = true
+
+[linters]
+  disable-all = true
+  enable = [
+    "deadcode",
+    "errcheck",
+    "goconst",
+    "gocyclo",
+    "gocritic",
+    "gofmt",
+    "golint",
+    "gosec",
+    "gosimple",
+    "ineffassign",
+    "lll",
+    "maligned",
+    "misspell",
+    "nakedret",
+    "nolintlint",
+    "staticcheck",
+    "structcheck",
+    "typecheck",
+    "unconvert",
+    "unparam",
+    "varcheck",
+    "vet",
+    "vetshadow",
+  ]
+
+
+[linters-settings.lll]
+    line-length = 120
+    tab-width = 4
+
+[issues]
+exclude-use-default = false
+
+  [[issues.exclude-rules]]
+  linters = [
+    "gosec"
+  ]
+  # G306 - "Expect WriteFile permissions to be 0600 or less".
+  text = "G306"
