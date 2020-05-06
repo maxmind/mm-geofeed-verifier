@@ -107,6 +107,11 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 	if len(mmdbRecord.Subdivisions) > 0 {
 		firstSubdivision = mmdbRecord.Subdivisions[0].IsoCode
 	}
+	// ISO-3166-2 region codes should be prefixed with the ISO country code,
+	// but we accept just the region code part
+	if strings.Contains(correction[2], "-") {
+		firstSubdivision = mmdbRecord.Country.IsoCode + "-" + firstSubdivision
+	}
 	if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) ||
 		!(strings.EqualFold(correction[2], firstSubdivision)) ||
 		!(strings.EqualFold(correction[3], mmdbRecord.City.Names["en"])) {

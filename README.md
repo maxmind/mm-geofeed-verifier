@@ -6,7 +6,7 @@ makes some comparisons to a given MMDB, typically the latest available GeoIP2-Ci
 
 ## Usage
 
-`mm-geofeed-verifier /path/to/geofeed-formatted-file /path/to/Database.mmdb`
+`mm-geofeed-verifier -geofeed-path /path/to/geofeed-formatted-file -mmdb-path /path/to/Database.mmdb`
 
 ## Installation and release
 
