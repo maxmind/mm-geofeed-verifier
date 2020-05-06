@@ -3,18 +3,19 @@ builds:
         - darwin
         - linux
         - windows
-archive:
-    wrap_in_directory: true
-    replacements:
-        darwin: Darwin
-        linux: Linux
-        windows: Windows
-        386: i386
-        amd64: x86_64
-    files:
-        - CHANGELOG.md
-        - LICENSE-APACHE
-        - LICENSE-MIT
-        - README.md
+archives:
+    -
+      wrap_in_directory: true
+      replacements:
+          darwin: Darwin
+          linux: Linux
+          windows: Windows
+          386: i386
+          amd64: x86_64
+      files:
+          - CHANGELOG.md
+          - LICENSE-APACHE
+          - LICENSE-MIT
+          - README.md
 checksum:
   name_template: 'checksums.txt'
