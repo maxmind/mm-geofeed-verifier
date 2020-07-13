@@ -90,7 +90,7 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 	networkOrIP := correction[0]
 	if !(strings.Contains(networkOrIP, "/")) {
 		if strings.Contains(networkOrIP, ":") {
-			networkOrIP += "/128"
+			networkOrIP += "/64"
 		} else {
 			networkOrIP += "/32"
 		}
