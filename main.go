@@ -1,10 +1,16 @@
 package main
 
-// Users will give us bulk correction files following
-// https://tools.ietf.org/html/draft-google-self-published-geofeeds-02
-// It isn't uncommon for the corrections they list to either match what we already have
-// or to be worse. This script can help us work that out. Right now, it only looks
-// at the ISO country code, but checking more fields should be easy enough.
+/*
+This script is meant to help verify 'bulk correction' files for submission
+to MaxMind. The files are expected to (mostly) follow the format provided by the RFC at
+https://tools.ietf.org/html/draft-google-self-published-geofeeds-09
+Region codes without the country prefix are accepted. eg, 'NY' is allowed, along with
+'US-NY' for the state of New York in the United States.
+Beyond verifying that the format of the data is correct, the script will also compare
+the corrections against a given MMDB, reporting on how many corrections differ from
+the contents in the database.
+ */
+
 import (
 	"encoding/csv"
 	"flag"
@@ -19,8 +25,6 @@ import (
 	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
-// Usage Example:
-// go run go/check_csv_corrections/main.go /path/to/corrections.csv /path/to/mmdbfile.mmdb
 func main() {
 	err := run()
 	if err != nil {
@@ -116,7 +120,7 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 	if len(mmdbRecord.Subdivisions) > 0 {
 		firstSubdivision = mmdbRecord.Subdivisions[0].IsoCode
 	}
-	// ISO-3166-2 region codes should be prefixed with the ISO country code,
+	// ISO-3166-2 region codes are prefixed with the ISO country code,
 	// but we accept just the region code part
 	if strings.Contains(correction[2], "-") {
 		firstSubdivision = mmdbRecord.Country.IsoCode + "-" + firstSubdivision
