@@ -9,7 +9,7 @@ Region codes without the country prefix are accepted. eg, 'NY' is allowed, along
 Beyond verifying that the format of the data is correct, the script will also compare
 the corrections against a given MMDB, reporting on how many corrections differ from
 the contents in the database.
- */
+*/
 
 import (
 	"encoding/csv"
@@ -26,13 +26,6 @@ import (
 )
 
 func main() {
-	err := run()
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func run() error {
 	geofeedFilename, mmdbFilename, err := parseArgs()
 	if err != nil {
 		return err
@@ -51,7 +44,7 @@ func run() error {
 	totalCount, correctionCount := 0, 0
 	geofeedFH, err := os.Open(geofeedFilename) //nolint: gosec // linter doesn't realize we are cleaning the filepath
 	if err != nil {
-		return err
+		log.Panic(err)
 	}
 	csvReader := csv.NewReader(geofeedFH)
 	csvReader.ReuseRecord = true
@@ -70,26 +63,25 @@ func run() error {
 			break
 		}
 		if err != nil {
-			geofeedFH.Close() //nolint: gosec
-			return err
+			geofeedFH.Close() //nolint: gosec, errcheck
+			log.Panic(err)
 		}
 		totalCount++
 		currentCorrectionCount, err := verifyCorrection(row, db)
 		if err != nil {
-			geofeedFH.Close() //nolint: gosec
-			return err
+			geofeedFH.Close() //nolint: gosec, errcheck
+			log.Panic(err)
 		}
 		correctionCount += currentCorrectionCount
 	}
 	if err != nil && err != io.EOF {
-		return fmt.Errorf("failed to read file: %s", err)
+		log.Panicf("Failed to read file: %s", err)
 	}
 	fmt.Printf(
 		"\nOut of %d potential corrections, %d may be different than our current mappings\n",
 		totalCount,
 		correctionCount,
 	)
-	return nil
 }
 
 func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
