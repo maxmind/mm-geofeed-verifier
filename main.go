@@ -122,9 +122,12 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 	if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) ||
 		!(strings.EqualFold(correction[2], firstSubdivision)) ||
 		!(strings.EqualFold(correction[3], mmdbRecord.City.Names["en"])) {
+		diffLine := "Found a potential improvement: '%s'\n" +
+			"\t\tcurrent country: '%s'\t\tsuggested country: '%s'\n" +
+			"\t\tcurrent city: '%s'\t\tsuggested city: '%s'\n" +
+			"\t\tcurrent region: '%s'\t\tsuggested region: '%s'\n\n"
 		fmt.Printf(
-			"Found a potential improvement: %s, current country: '%s',suggested country: '%s', "+
-				"current city: '%s', suggested city: '%s', current region: '%s', suggested region: '%s'\n",
+			diffLine,
 			networkOrIP,
 			mmdbRecord.Country.IsoCode,
 			correction[1],
