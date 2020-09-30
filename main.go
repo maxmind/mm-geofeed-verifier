@@ -18,9 +18,10 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/TomOnTime/utfutil"
 
 	geoip2 "github.com/oschwald/geoip2-golang"
 )
@@ -42,10 +43,11 @@ func main() {
 	}()
 
 	totalCount, correctionCount := 0, 0
-	geofeedFH, err := os.Open(geofeedFilename) //nolint: gosec // linter doesn't realize we are cleaning the filepath
+	geofeedFH, err := utfutil.OpenFile(geofeedFilename, utfutil.UTF8)
 	if err != nil {
 		log.Panic(err)
 	}
+
 	csvReader := csv.NewReader(geofeedFH)
 	csvReader.ReuseRecord = true
 	csvReader.Comment = '#'
