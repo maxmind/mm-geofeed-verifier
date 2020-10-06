@@ -14,6 +14,7 @@ the contents in the database.
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -48,6 +49,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if conf.gf == "" || conf.db == "" {
+		//fmt.Println(output)
+		log.Fatal(err)
+	}
+
 	c, err := processGeofeed(conf.gf, conf.db)
 	if err != nil {
 		log.Fatal(err)
@@ -78,6 +84,12 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 	if err != nil {
 		return nil, buf.String(), err
 	}
+
+	if conf.gf == "" {
+		flags.PrintDefaults()
+		return nil, buf.String(), errors.New("-gf is required")
+	}
+
 	return &conf, buf.String(), nil
 }
 
