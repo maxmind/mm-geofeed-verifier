@@ -26,15 +26,69 @@ import (
 	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
+type counts struct {
+	total       int
+	differences int
+}
+
 func main() {
 	geofeedFilename, mmdbFilename, err := parseArgs()
 	if err != nil {
 		return err
 	}
 
-	db, err := geoip2.Open(mmdbFilename)
+	c, err := processGeofeed(geofeedFilename, mmdbFilename)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	fmt.Printf(
+		"\nOut of %d potential corrections, %d may be different than our current mappings\n",
+		c.total,
+		c.differences,
+	)
+}
+
+func parseArgs() (string, string, error) {
+	geofeedPath := flag.String(
+		"geofeed-path",
+		"",
+		"Path to the local geofeed file to verify",
+	)
+
+	mmdbPath := flag.String(
+		"mmdb-path",
+		"/usr/local/share/GeoIP/GeoIP2-City.mmdb",
+		"Path to MMDB file to compare geofeed file against",
+	)
+	flag.Parse()
+
+	cleanGeofeedPath := filepath.Clean(*geofeedPath)
+	cleanMMDBPath := filepath.Clean(*mmdbPath)
+
+	var err error
+	if cleanGeofeedPath == "." { // result of empty string, probably no arg given
+		err = fmt.Errorf("'--geofeed-path' is required")
+	}
+	return cleanGeofeedPath, cleanMMDBPath, err
+
+}
+
+func processGeofeed(geofeedFilename, mmdbFilename string) (counts, error) {
+	var c counts
+	geofeedFH, err := utfutil.OpenFile(geofeedFilename, utfutil.UTF8)
+	if err != nil {
+		return c, err
+	}
+	defer func() {
+		if err := geofeedFH.Close(); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	db, err := geoip2.Open(mmdbFilename)
+	if err != nil {
+		return c, err
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -42,22 +96,11 @@ func main() {
 		}
 	}()
 
-	totalCount, correctionCount := 0, 0
-	geofeedFH, err := utfutil.OpenFile(geofeedFilename, utfutil.UTF8)
-	if err != nil {
-		log.Panic(err)
-	}
-
 	csvReader := csv.NewReader(geofeedFH)
 	csvReader.ReuseRecord = true
 	csvReader.Comment = '#'
 	csvReader.FieldsPerRecord = 5
 	csvReader.TrimLeadingSpace = true
-	defer func() {
-		if err := geofeedFH.Close(); err != nil {
-			log.Println(err)
-		}
-	}()
 
 	for {
 		row, err := csvReader.Read()
@@ -66,24 +109,20 @@ func main() {
 		}
 		if err != nil {
 			geofeedFH.Close() //nolint: gosec, errcheck
-			log.Panic(err)
+			return c, err
 		}
-		totalCount++
+		c.total++
 		currentCorrectionCount, err := verifyCorrection(row, db)
 		if err != nil {
 			geofeedFH.Close() //nolint: gosec, errcheck
-			log.Panic(err)
+			return c, err
 		}
-		correctionCount += currentCorrectionCount
+		c.differences += currentCorrectionCount
 	}
 	if err != nil && err != io.EOF {
-		log.Panicf("Failed to read file: %s", err)
+		return c, err
 	}
-	fmt.Printf(
-		"\nOut of %d potential corrections, %d may be different than our current mappings\n",
-		totalCount,
-		correctionCount,
-	)
+	return c, nil
 }
 
 func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
@@ -139,28 +178,4 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 		return 1, nil
 	}
 	return 0, nil
-}
-
-func parseArgs() (string, string, error) {
-	geofeedPath := flag.String(
-		"geofeed-path",
-		"",
-		"Path to the local geofeed file to verify",
-	)
-
-	mmdbPath := flag.String(
-		"mmdb-path",
-		"/usr/local/share/GeoIP/GeoIP2-City.mmdb",
-		"Path to MMDB file to compare geofeed file against",
-	)
-	flag.Parse()
-
-	cleanGeofeedPath := filepath.Clean(*geofeedPath)
-	cleanMMDBPath := filepath.Clean(*mmdbPath)
-
-	var err error
-	if cleanGeofeedPath == "." { // result of empty string, probably no arg given
-		err = fmt.Errorf("'--geofeed-path' is required")
-	}
-	return cleanGeofeedPath, cleanMMDBPath, err
 }
