@@ -12,12 +12,14 @@ the contents in the database.
 */
 
 import (
+	"bytes"
 	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -26,18 +28,27 @@ import (
 	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
+type config struct {
+	gf string
+	db string
+}
+
 type counts struct {
 	total       int
 	differences int
 }
 
 func main() {
-	geofeedFilename, mmdbFilename, err := parseArgs()
-	if err != nil {
-		return err
+	conf, output, err := parseFlags(os.Args[0], os.Args[1:])
+	if err == flag.ErrHelp {
+		fmt.Println(output)
+		os.Exit(2)
+	} else if err != nil {
+		fmt.Println(output)
+		log.Fatal(err)
 	}
 
-	c, err := processGeofeed(geofeedFilename, mmdbFilename)
+	c, err := processGeofeed(conf.gf, conf.db)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,34 +60,30 @@ func main() {
 	)
 }
 
-func parseArgs() (string, string, error) {
-	geofeedPath := flag.String(
-		"geofeed-path",
-		"",
-		"Path to the local geofeed file to verify",
-	)
+func parseFlags(program string, args []string) (c *config, output string, err error) {
+	flags := flag.NewFlagSet(program, flag.ContinueOnError)
+	var buf bytes.Buffer
+	flags.SetOutput(&buf)
 
-	mmdbPath := flag.String(
-		"mmdb-path",
+	var conf config
+	flags.StringVar(&conf.gf, "gf", "", "Path to local geofeed file to verify")
+	flags.StringVar(
+		&conf.db,
+		"db",
 		"/usr/local/share/GeoIP/GeoIP2-City.mmdb",
 		"Path to MMDB file to compare geofeed file against",
 	)
-	flag.Parse()
 
-	cleanGeofeedPath := filepath.Clean(*geofeedPath)
-	cleanMMDBPath := filepath.Clean(*mmdbPath)
-
-	var err error
-	if cleanGeofeedPath == "." { // result of empty string, probably no arg given
-		err = fmt.Errorf("'--geofeed-path' is required")
+	err = flags.Parse(args)
+	if err != nil {
+		return nil, buf.String(), err
 	}
-	return cleanGeofeedPath, cleanMMDBPath, err
-
+	return &conf, buf.String(), nil
 }
 
 func processGeofeed(geofeedFilename, mmdbFilename string) (counts, error) {
 	var c counts
-	geofeedFH, err := utfutil.OpenFile(geofeedFilename, utfutil.UTF8)
+	geofeedFH, err := utfutil.OpenFile(filepath.Clean(geofeedFilename), utfutil.UTF8)
 	if err != nil {
 		return c, err
 	}
@@ -86,7 +93,7 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, error) {
 		}
 	}()
 
-	db, err := geoip2.Open(mmdbFilename)
+	db, err := geoip2.Open(filepath.Clean(mmdbFilename))
 	if err != nil {
 		return c, err
 	}
