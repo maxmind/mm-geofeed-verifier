@@ -40,23 +40,22 @@ type counts struct {
 }
 
 func main() {
-	conf, output, err := parseFlags(os.Args[0], os.Args[1:])
-	if err == flag.ErrHelp {
-		fmt.Println(output)
-		os.Exit(2)
-	} else if err != nil {
-		fmt.Println(output)
+	err := run()
+	if err != nil {
 		log.Fatal(err)
 	}
+}
 
-	if conf.gf == "" || conf.db == "" {
-		//fmt.Println(output)
-		log.Fatal(err)
+func run() error {
+	conf, output, err := parseFlags(os.Args[0], os.Args[1:])
+	if err != nil {
+		fmt.Println(output)
+		return err
 	}
 
 	c, err := processGeofeed(conf.gf, conf.db)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	fmt.Printf(
@@ -64,6 +63,7 @@ func main() {
 		c.total,
 		c.differences,
 	)
+	return nil
 }
 
 func parseFlags(program string, args []string) (c *config, output string, err error) {
@@ -127,15 +127,15 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, error) {
 			break
 		}
 		if err != nil {
-			geofeedFH.Close() //nolint: gosec, errcheck
 			return c, err
 		}
+
 		c.total++
 		currentCorrectionCount, err := verifyCorrection(row, db)
 		if err != nil {
-			geofeedFH.Close() //nolint: gosec, errcheck
 			return c, err
 		}
+
 		c.differences += currentCorrectionCount
 	}
 	if err != nil && err != io.EOF {

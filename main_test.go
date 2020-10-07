@@ -49,7 +49,7 @@ func TestParseFlagsCorrect(t *testing.T) {
 }
 
 func TestParseFlagsUsage(t *testing.T) {
-	var usageArgs = []string{"-help", "-h", "--help"}
+	usageArgs := []string{"-help", "-h", "--help"}
 
 	for _, arg := range usageArgs {
 		t.Run(arg, func(t *testing.T) {
@@ -100,5 +100,4 @@ func TestParseFlagsError(t *testing.T) {
 			},
 		)
 	}
-
 }
