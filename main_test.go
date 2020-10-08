@@ -101,3 +101,31 @@ func TestParseFlagsError(t *testing.T) {
 		)
 	}
 }
+
+type processGeofeedTest struct {
+	gf string
+	db string
+	c  counts
+}
+
+func TestProcessGeofeed(t *testing.T) {
+	tests := []processGeofeedTest{
+		{
+			"test_data/geofeed1.csv",
+			"test_data/GeoIP2-City-Test.mmdb",
+			counts{
+				1,
+				1,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(
+			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
+				c, err := processGeofeed(test.gf, test.db)
+				assert.NoError(t, err, "processGeofeed ran without error")
+				assert.Equal(t, test.c, c, "processGeofeed returned expected results")
+			},
+		)
+	}
+}
