@@ -53,13 +53,14 @@ func run() error {
 		return err
 	}
 
-	c, err := processGeofeed(conf.gf, conf.db)
+	c, diffLines, err := processGeofeed(conf.gf, conf.db)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf(
-		"\nOut of %d potential corrections, %d may be different than our current mappings\n",
+		strings.Join(diffLines, "\n")+
+			"\nOut of %d potential corrections, %d may be different than our current mappings\n",
 		c.total,
 		c.differences,
 	)
@@ -93,11 +94,12 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 	return &conf, buf.String(), nil
 }
 
-func processGeofeed(geofeedFilename, mmdbFilename string) (counts, error) {
+func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, error) {
 	var c counts
+	var diffLines []string
 	geofeedFH, err := utfutil.OpenFile(filepath.Clean(geofeedFilename), utfutil.UTF8)
 	if err != nil {
-		return c, err
+		return c, diffLines, err
 	}
 	defer func() {
 		if err := geofeedFH.Close(); err != nil {
@@ -107,7 +109,7 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, error) {
 
 	db, err := geoip2.Open(filepath.Clean(mmdbFilename))
 	if err != nil {
-		return c, err
+		return c, diffLines, err
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -127,24 +129,25 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, error) {
 			break
 		}
 		if err != nil {
-			return c, err
+			return c, diffLines, err
 		}
 
 		c.total++
-		currentCorrectionCount, err := verifyCorrection(row, db)
+		currentCorrectionCount, diffLine, err := verifyCorrection(row, db)
+		diffLines = append(diffLines, diffLine)
 		if err != nil {
-			return c, err
+			return c, diffLines, err
 		}
 
 		c.differences += currentCorrectionCount
 	}
 	if err != nil && err != io.EOF {
-		return c, err
+		return c, diffLines, err
 	}
-	return c, nil
+	return c, diffLines, nil
 }
 
-func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
+func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, error) {
 	/*
 	   0: network (CIDR or single IP)
 	   1: ISO-3166 country code
@@ -162,11 +165,11 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 	}
 	network, _, err := net.ParseCIDR(networkOrIP)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	mmdbRecord, err := db.City(network)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	firstSubdivision := ""
 	if len(mmdbRecord.Subdivisions) > 0 {
@@ -180,12 +183,10 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 	if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) ||
 		!(strings.EqualFold(correction[2], firstSubdivision)) ||
 		!(strings.EqualFold(correction[3], mmdbRecord.City.Names["en"])) {
-		diffLine := "Found a potential improvement: '%s'\n" +
-			"\t\tcurrent country: '%s'\t\tsuggested country: '%s'\n" +
-			"\t\tcurrent city: '%s'\t\tsuggested city: '%s'\n" +
-			"\t\tcurrent region: '%s'\t\tsuggested region: '%s'\n\n"
-		fmt.Printf(
-			diffLine,
+		diffLine := fmt.Sprintf("Found a potential improvement: '%s'\n"+
+			"\t\tcurrent country: '%s'\t\tsuggested country: '%s'\n"+
+			"\t\tcurrent city: '%s'\t\tsuggested city: '%s'\n"+
+			"\t\tcurrent region: '%s'\t\tsuggested region: '%s'\n\n",
 			networkOrIP,
 			mmdbRecord.Country.IsoCode,
 			correction[1],
@@ -194,7 +195,7 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, error) {
 			firstSubdivision,
 			correction[2],
 		)
-		return 1, nil
+		return 1, diffLine, nil
 	}
-	return 0, nil
+	return 0, "", nil
 }

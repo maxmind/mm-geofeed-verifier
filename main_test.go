@@ -105,6 +105,7 @@ func TestParseFlagsError(t *testing.T) {
 type processGeofeedTest struct {
 	gf string
 	db string
+	dl string
 	c  counts
 }
 
@@ -113,17 +114,21 @@ func TestProcessGeofeed(t *testing.T) {
 		{
 			"test_data/geofeed1.csv",
 			"test_data/GeoIP2-City-Test.mmdb",
+			"Found a potential improvement: '2a02:ecc0::/29",
 			counts{
 				1,
 				1,
 			},
 		},
 	}
+	// Testing the full content of the difference explanation strings is likely to be
+	// tedious and brittle, so we will just check for some substring.
 	for _, test := range tests {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
-				c, err := processGeofeed(test.gf, test.db)
+				c, diffLines, err := processGeofeed(test.gf, test.db)
 				assert.NoError(t, err, "processGeofeed ran without error")
+				assert.Contains(t, diffLines[0], test.dl, "got expected substring")
 				assert.Equal(t, test.c, c, "processGeofeed returned expected results")
 			},
 		)
