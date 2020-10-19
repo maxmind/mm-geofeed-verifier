@@ -75,15 +75,25 @@ func TestParseFlagsError(t *testing.T) {
 			"-gf is required",
 		},
 		{
+			[]string{"-db", ""},
+			"Path to local geofeed file",
+			"-gf is required and -db can not be an emptry string",
+		},
+		{
 			[]string{"-db", "file.mdb"},
 			"Path to local geofeed file",
 			"-gf is required",
+		},
+		{
+			[]string{"-gf", "geofeed.csv", "-db", ""},
+			"Path to local geofeed file",
+			"-db is required",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(
-			strings.Join(test.args, ""), func(t *testing.T) {
+			strings.Join(test.args, " "), func(t *testing.T) {
 				_, output, err := parseFlags("program", test.args)
 				assert.Contains(
 					t,

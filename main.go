@@ -86,9 +86,19 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 		return nil, buf.String(), err
 	}
 
+	if conf.gf == "" && conf.db == "" {
+		flags.PrintDefaults()
+		return nil, buf.String(), errors.New(
+			"-gf is required and -db can not be an emptry string",
+		)
+	}
 	if conf.gf == "" {
 		flags.PrintDefaults()
 		return nil, buf.String(), errors.New("-gf is required")
+	}
+	if conf.db == "" {
+		flags.PrintDefaults()
+		return nil, buf.String(), errors.New("-db is required")
 	}
 
 	return &conf, buf.String(), nil
