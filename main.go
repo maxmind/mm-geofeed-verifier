@@ -3,7 +3,7 @@ package main
 /*
 This script is meant to help verify 'bulk correction' files for submission
 to MaxMind. The files are expected to (mostly) follow the format provided by the RFC at
-https://tools.ietf.org/html/draft-google-self-published-geofeeds-09
+https://datatracker.ietf.org/doc/rfc8805/
 Region codes without the country prefix are accepted. eg, 'NY' is allowed, along with
 'US-NY' for the state of New York in the United States.
 Beyond verifying that the format of the data is correct, the script will also compare
@@ -135,10 +135,6 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, err
 
 	const expectedFieldsPerRecord = 5
 
-	// We will assume one record per line. Multi-line records are valid
-	// so this assumption isn't guaranteed to hold up; but with only five
-	// fields per record, asking the geofeed producer to restrict themselves
-	// to one record per line seems reasonable.
 	rowCount := 0
 
 	for {

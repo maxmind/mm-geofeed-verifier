@@ -1,12 +1,12 @@
 ## mm-geofeed-verifier
 
 mm-geofeed-verifier attempts to validate that a given file follows the format
-suggested at https://tools.ietf.org/html/draft-google-self-published-geofeeds-05, and
+suggested at https://datatracker.ietf.org/doc/html/rfc8805, and
 makes some comparisons to a given MMDB, typically the latest available GeoIP2-City.mmdb
 
 ## Usage
 
-`mm-geofeed-verifier -geofeed-path /path/to/geofeed-formatted-file -mmdb-path /path/to/Database.mmdb`
+`mm-geofeed-verifier -gf /path/to/geofeed-formatted-file -db /path/to/Database.mmdb`
 
 ## Installation and release
 
