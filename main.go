@@ -130,7 +130,7 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, err
 	csvReader := csv.NewReader(geofeedFH)
 	csvReader.ReuseRecord = true
 	csvReader.Comment = '#'
-	csvReader.FieldsPerRecord = 5
+	csvReader.FieldsPerRecord = -1
 	csvReader.TrimLeadingSpace = true
 
 	for {
@@ -143,7 +143,7 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, err
 		}
 
 		c.total++
-		currentCorrectionCount, diffLine, err := verifyCorrection(row, db)
+		currentCorrectionCount, diffLine, err := verifyCorrection(row[0:4], db)
 		diffLines = append(diffLines, diffLine)
 		if err != nil {
 			return c, diffLines, err
