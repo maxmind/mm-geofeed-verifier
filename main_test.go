@@ -117,10 +117,11 @@ type processGeofeedTest struct {
 	db string
 	dl []string
 	c  counts
+	em string
 }
 
 func TestProcessGeofeed(t *testing.T) {
-	tests := []processGeofeedTest{
+	goodTests := []processGeofeedTest{
 		{
 			"test_data/geofeed1.csv",
 			"test_data/GeoIP2-City-Test.mmdb",
@@ -132,11 +133,13 @@ func TestProcessGeofeed(t *testing.T) {
 				2,
 				2,
 			},
+			"",
 		},
 	}
+
 	// Testing the full content of the difference explanation strings is likely to be
 	// tedious and brittle, so we will just check for some substring.
-	for _, test := range tests {
+	for _, test := range goodTests {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
 				c, dl, err := processGeofeed(test.gf, test.db)
@@ -150,6 +153,30 @@ func TestProcessGeofeed(t *testing.T) {
 					)
 				}
 				assert.Equal(t, test.c, c, "processGeofeed returned expected results")
+			},
+		)
+	}
+
+	badTests := []processGeofeedTest{
+		{
+			"test_data/geofeed-missing-fields.csv",
+			"test_data/GeoIP2-City-Test.mmdb",
+			[]string{},
+			counts{},
+			"saw fewer than the expected 5 fields at line 1",
+		},
+	}
+
+	for _, test := range badTests {
+		t.Run(
+			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
+				_, _, err := processGeofeed(test.gf, test.db)
+				assert.Errorf(
+					t,
+					err,
+					test.em,
+					"got expected error: %s", test.em,
+				)
 			},
 		)
 	}

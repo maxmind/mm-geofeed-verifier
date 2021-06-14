@@ -133,17 +133,33 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, err
 	csvReader.FieldsPerRecord = -1
 	csvReader.TrimLeadingSpace = true
 
+	const expectedFieldsPerRecord = 5
+
+	// We will assume one record per line. Multi-line records are valid
+	// so this assumption isn't guaranteed to hold up; but with only five
+	// fields per record, asking the geofeed producer to restrict themselves
+	// to one record per line seems reasonable.
+	rowCount := 0
+
 	for {
 		row, err := csvReader.Read()
 		if err == io.EOF {
 			break
 		}
+		rowCount++
 		if err != nil {
 			return c, diffLines, err
 		}
+		if len(row) < expectedFieldsPerRecord {
+			return c, nil, fmt.Errorf(
+				"saw fewer than the expected %d fields at line %d",
+				expectedFieldsPerRecord,
+				rowCount,
+			)
+		}
 
 		c.total++
-		currentCorrectionCount, diffLine, err := verifyCorrection(row[0:4], db)
+		currentCorrectionCount, diffLine, err := verifyCorrection(row[0:expectedFieldsPerRecord-1], db)
 		diffLines = append(diffLines, diffLine)
 		if err != nil {
 			return c, diffLines, err
