@@ -59,8 +59,8 @@ func run() error {
 	}
 
 	fmt.Printf(
-		strings.Join(diffLines, "\n")+
-			"\nOut of %d potential corrections, %d may be different than our current mappings\n",
+		strings.Join(diffLines, "\n\n")+
+			"\n\nOut of %d potential corrections, %d may be different than our current mappings\n\n",
 		c.total,
 		c.differences,
 	)
@@ -155,7 +155,7 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, err
 		}
 
 		c.total++
-		currentCorrectionCount, diffLine, err := verifyCorrection(row[0:expectedFieldsPerRecord-1], db)
+		currentCorrectionCount, diffLine, err := verifyCorrection(row[:expectedFieldsPerRecord], db)
 		diffLines = append(diffLines, diffLine)
 		if err != nil {
 			return c, diffLines, err
@@ -177,6 +177,7 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 	   3: city name
 	   4: postal code
 	*/
+
 	networkOrIP := correction[0]
 	if !(strings.Contains(networkOrIP, "/")) {
 		if strings.Contains(networkOrIP, ":") {
@@ -189,10 +190,12 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 	if err != nil {
 		return 0, "", err
 	}
+
 	mmdbRecord, err := db.City(network)
 	if err != nil {
 		return 0, "", err
 	}
+
 	firstSubdivision := ""
 	if len(mmdbRecord.Subdivisions) > 0 {
 		firstSubdivision = mmdbRecord.Subdivisions[0].IsoCode
@@ -202,22 +205,70 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 	if strings.Contains(correction[2], "-") {
 		firstSubdivision = mmdbRecord.Country.IsoCode + "-" + firstSubdivision
 	}
-	if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) ||
-		!(strings.EqualFold(correction[2], firstSubdivision)) ||
-		!(strings.EqualFold(correction[3], mmdbRecord.City.Names["en"])) {
-		diffLine := fmt.Sprintf("Found a potential improvement: '%s'\n"+
-			"\t\tcurrent country: '%s'\t\tsuggested country: '%s'\n"+
-			"\t\tcurrent city: '%s'\t\tsuggested city: '%s'\n"+
-			"\t\tcurrent region: '%s'\t\tsuggested region: '%s'\n\n",
-			networkOrIP,
-			mmdbRecord.Country.IsoCode,
-			correction[1],
-			mmdbRecord.City.Names["en"],
-			correction[3],
-			firstSubdivision,
-			correction[2],
+
+	const indent = "\t\t"
+
+	foundDiff := false
+	lines := []string{fmt.Sprintf("\nFound a potential improvement: '%s'", networkOrIP)}
+
+	if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) {
+		foundDiff = true
+		lines = append(
+			lines,
+			fmt.Sprintf(
+				"current country: '%s'%ssuggested country: '%s'",
+				mmdbRecord.Country.IsoCode,
+				indent,
+				correction[1],
+			),
 		)
-		return 1, diffLine, nil
+	}
+
+	if !(strings.EqualFold(correction[2], firstSubdivision)) {
+		foundDiff = true
+		lines = append(
+			lines,
+			fmt.Sprintf(
+				"current region: '%s'%ssuggested region: '%s'",
+				firstSubdivision,
+				indent,
+				correction[2],
+			),
+		)
+	}
+
+	if !(strings.EqualFold(correction[3], mmdbRecord.City.Names["en"])) {
+		foundDiff = true
+		lines = append(
+			lines,
+			fmt.Sprintf(
+				"current city: '%s'%ssuggested city: '%s'",
+				mmdbRecord.City.Names["en"],
+				indent,
+				correction[3],
+			),
+		)
+	}
+
+	// if no postal code is provided in the correction, do not report on any
+	// differences; postal codes are frequently omitted, and as of 2020-08-01 are
+	// the postal code field is considered deprecated
+	if correction[4] != "" && !(strings.EqualFold(correction[4], mmdbRecord.Postal.Code)) {
+		foundDiff = true
+		lines = append(
+			lines,
+			fmt.Sprintf(
+				"current postal code: '%s'%ssuggested postal code: '%s'",
+				mmdbRecord.Postal.Code,
+				indent,
+				correction[4],
+			),
+		)
+
+	}
+
+	if foundDiff {
+		return 1, strings.Join(lines, "\n"+indent), nil
 	}
 	return 0, "", nil
 }

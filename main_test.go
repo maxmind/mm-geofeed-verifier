@@ -127,7 +127,7 @@ func TestProcessGeofeed(t *testing.T) {
 			"test_data/GeoIP2-City-Test.mmdb",
 			[]string{
 				"Found a potential improvement: '2a02:ecc0::/29",
-				"Found a potential improvement: '202.196.224.5/32",
+				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			counts{
 				2,
@@ -138,7 +138,7 @@ func TestProcessGeofeed(t *testing.T) {
 	}
 
 	// Testing the full content of the difference explanation strings is likely to be
-	// tedious and brittle, so we will just check for some substring.
+	// tedious and brittle, so we will just check for some substrings.
 	for _, test := range goodTests {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
