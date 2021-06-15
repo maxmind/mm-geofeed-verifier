@@ -171,7 +171,7 @@ func TestProcessGeofeed(t *testing.T) {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
 				_, _, err := processGeofeed(test.gf, test.db)
-				assert.Errorf(
+				assert.EqualError(
 					t,
 					err,
 					test.em,
