@@ -115,31 +115,68 @@ func TestParseFlagsError(t *testing.T) {
 type processGeofeedTest struct {
 	gf string
 	db string
-	dl string
+	dl []string
 	c  counts
+	em string
 }
 
 func TestProcessGeofeed(t *testing.T) {
-	tests := []processGeofeedTest{
+	goodTests := []processGeofeedTest{
 		{
 			"test_data/geofeed1.csv",
 			"test_data/GeoIP2-City-Test.mmdb",
-			"Found a potential improvement: '2a02:ecc0::/29",
-			counts{
-				1,
-				1,
+			[]string{
+				"Found a potential improvement: '2a02:ecc0::/29",
+				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
+			counts{
+				2,
+				2,
+			},
+			"",
 		},
 	}
+
 	// Testing the full content of the difference explanation strings is likely to be
-	// tedious and brittle, so we will just check for some substring.
-	for _, test := range tests {
+	// tedious and brittle, so we will just check for some substrings.
+	for _, test := range goodTests {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
-				c, diffLines, err := processGeofeed(test.gf, test.db)
+				c, dl, err := processGeofeed(test.gf, test.db)
 				assert.NoError(t, err, "processGeofeed ran without error")
-				assert.Contains(t, diffLines[0], test.dl, "got expected substring")
+				for i, s := range test.dl {
+					assert.Contains(
+						t,
+						dl[i],
+						s,
+						"got expected substring: '%s', substring",
+					)
+				}
 				assert.Equal(t, test.c, c, "processGeofeed returned expected results")
+			},
+		)
+	}
+
+	badTests := []processGeofeedTest{
+		{
+			"test_data/geofeed-missing-fields.csv",
+			"test_data/GeoIP2-City-Test.mmdb",
+			[]string{},
+			counts{},
+			"saw fewer than the expected 5 fields at line 1",
+		},
+	}
+
+	for _, test := range badTests {
+		t.Run(
+			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
+				_, _, err := processGeofeed(test.gf, test.db)
+				assert.EqualError(
+					t,
+					err,
+					test.em,
+					"got expected error: %s", test.em,
+				)
 			},
 		)
 	}
