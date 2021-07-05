@@ -179,6 +179,9 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 	*/
 
 	networkOrIP := correction[0]
+	if networkOrIP == "" {
+		return 0, "", errors.New("network field is empty")
+	}
 	if !(strings.Contains(networkOrIP, "/")) {
 		if strings.Contains(networkOrIP, ":") {
 			networkOrIP += "/64"

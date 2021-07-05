@@ -165,6 +165,13 @@ func TestProcessGeofeed(t *testing.T) {
 			counts{},
 			"saw fewer than the expected 5 fields at line 1",
 		},
+		{
+			gf: "test_data/geofeed-empty-network.csv",
+			db: "test_data/GeoIP2-City-Test.mmdb",
+			dl: []string{},
+			c:  counts{},
+			em: "network field is empty",
+		},
 	}
 
 	for _, test := range badTests {
