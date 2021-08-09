@@ -178,6 +178,10 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 	   4: postal code
 	*/
 
+	for i, v := range correction {
+		correction[i] = strings.TrimSpace(v)
+	}
+
 	networkOrIP := correction[0]
 	if networkOrIP == "" {
 		return 0, "", errors.New("network field is empty")
