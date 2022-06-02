@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/TomOnTime/utfutil"
@@ -57,7 +58,7 @@ func run() error {
 		return err
 	}
 
-	c, diffLines, err := processGeofeed(conf.gf, conf.db, conf.isp)
+	c, diffLines, asnCounts, err := processGeofeed(conf.gf, conf.db, conf.isp)
 	if err != nil {
 		return err
 	}
@@ -68,6 +69,22 @@ func run() error {
 		c.total,
 		c.differences,
 	)
+
+	// https://stackoverflow.com/a/56706305
+	asNumbers := make([]uint, 0, len(asnCounts))
+	for asNumber := range asnCounts {
+		asNumbers = append(asNumbers, asNumber)
+	}
+	sort.Slice(
+		asNumbers,
+		func(i, j int) bool {
+			return asnCounts[asNumbers[i]] > asnCounts[asNumbers[j]]
+		},
+	)
+	for _, asNumber := range asNumbers {
+		fmt.Printf("ASN: %d, count: %d\n", asNumber, asnCounts[asNumber])
+	}
+
 	return nil
 }
 
@@ -115,12 +132,12 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 	return &conf, buf.String(), nil
 }
 
-func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, []string, error) {
+func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, []string, map[uint]int, error) {
 	var c counts
 	var diffLines []string
 	geofeedFH, err := utfutil.OpenFile(filepath.Clean(geofeedFilename), utfutil.UTF8)
 	if err != nil {
-		return c, diffLines, err
+		return c, diffLines, nil, err
 	}
 	defer func() {
 		if err := geofeedFH.Close(); err != nil {
@@ -130,7 +147,7 @@ func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, 
 
 	db, err := geoip2.Open(filepath.Clean(mmdbFilename))
 	if err != nil {
-		return c, diffLines, err
+		return c, diffLines, nil, err
 	}
 	defer db.Close()
 
@@ -138,10 +155,11 @@ func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, 
 	if len(ispFilename) > 0 {
 		ispdb, err = geoip2.Open(filepath.Clean(ispFilename))
 		if err != nil {
-			return c, diffLines, err
+			return c, diffLines, nil, err
 		}
 		defer ispdb.Close()
 	}
+	asnCounts := make(map[uint]int)
 
 	csvReader := csv.NewReader(geofeedFH)
 	csvReader.ReuseRecord = true
@@ -160,10 +178,10 @@ func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, 
 		}
 		rowCount++
 		if err != nil {
-			return c, diffLines, err
+			return c, diffLines, asnCounts, err
 		}
 		if len(row) < expectedFieldsPerRecord {
-			return c, nil, fmt.Errorf(
+			return c, nil, nil, fmt.Errorf(
 				"saw fewer than the expected %d fields at line %d",
 				expectedFieldsPerRecord,
 				rowCount,
@@ -171,9 +189,9 @@ func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, 
 		}
 
 		c.total++
-		diffLine, err := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb)
+		diffLine, err := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts)
 		if err != nil {
-			return c, diffLines, err
+			return c, diffLines, asnCounts, err
 		}
 
 		if len(diffLine) > 0 {
@@ -182,12 +200,12 @@ func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, 
 		}
 	}
 	if err != nil && err != io.EOF {
-		return c, diffLines, err
+		return c, diffLines, asnCounts, err
 	}
-	return c, diffLines, nil
+	return c, diffLines, asnCounts, nil
 }
 
-func verifyCorrection(correction []string, db, ispdb *geoip2.Reader) (string, error) {
+func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts map[uint]int) (string, error) {
 	/*
 	   0: network (CIDR or single IP)
 	   1: ISO-3166 country code
@@ -229,6 +247,22 @@ func verifyCorrection(correction []string, db, ispdb *geoip2.Reader) (string, er
 	// but we accept just the region code part
 	if strings.Contains(correction[2], "-") {
 		firstSubdivision = mmdbRecord.Country.IsoCode + "-" + firstSubdivision
+	}
+
+	asNumber := uint(0)
+	asName := ""
+	ispName := ""
+	if ispdb != nil {
+		ispRecord, err := ispdb.ISP(network)
+		if err != nil {
+			return "", err
+		}
+		asNumber = ispRecord.AutonomousSystemNumber
+		asName = ispRecord.AutonomousSystemOrganization
+		ispName = ispRecord.ISP
+	}
+	if asNumber > 0 {
+		asnCounts[asNumber]++
 	}
 
 	const indent = "\t\t"
@@ -293,18 +327,6 @@ func verifyCorrection(correction []string, db, ispdb *geoip2.Reader) (string, er
 	}
 
 	if foundDiff {
-		asNumber := uint(0)
-		asName := ""
-		ispName := ""
-		if ispdb != nil {
-			ispRecord, err := ispdb.ISP(network)
-			if err != nil {
-				return "", err
-			}
-			asNumber = ispRecord.AutonomousSystemNumber
-			asName = ispRecord.AutonomousSystemOrganization
-			ispName = ispRecord.ISP
-		}
 
 		if asNumber > 0 {
 			lines = append(
