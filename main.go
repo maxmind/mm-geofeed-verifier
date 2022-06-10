@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/TomOnTime/utfutil"
@@ -29,9 +30,13 @@ import (
 	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
+const version = "2.2.0"
+
 type config struct {
-	gf string
-	db string
+	gf      string
+	db      string
+	isp     string
+	version bool
 }
 
 type counts struct {
@@ -53,7 +58,7 @@ func run() error {
 		return err
 	}
 
-	c, diffLines, err := processGeofeed(conf.gf, conf.db)
+	c, diffLines, asnCounts, err := processGeofeed(conf.gf, conf.db, conf.isp)
 	if err != nil {
 		return err
 	}
@@ -64,6 +69,22 @@ func run() error {
 		c.total,
 		c.differences,
 	)
+
+	// https://stackoverflow.com/a/56706305
+	asNumbers := make([]uint, 0, len(asnCounts))
+	for asNumber := range asnCounts {
+		asNumbers = append(asNumbers, asNumber)
+	}
+	sort.Slice(
+		asNumbers,
+		func(i, j int) bool {
+			return asnCounts[asNumbers[i]] > asnCounts[asNumbers[j]]
+		},
+	)
+	for _, asNumber := range asNumbers {
+		fmt.Printf("ASN: %d, count: %d\n", asNumber, asnCounts[asNumber])
+	}
+
 	return nil
 }
 
@@ -74,16 +95,23 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 
 	var conf config
 	flags.StringVar(&conf.gf, "gf", "", "Path to local geofeed file to verify")
+	flags.StringVar(&conf.isp, "isp", "", "Path to ISP MMDB file (optional)")
 	flags.StringVar(
 		&conf.db,
 		"db",
 		"/usr/local/share/GeoIP/GeoIP2-City.mmdb",
 		"Path to MMDB file to compare geofeed file against",
 	)
+	flags.BoolVar(&conf.version, "V", false, "Display version")
 
 	err = flags.Parse(args)
 	if err != nil {
 		return nil, buf.String(), err
+	}
+
+	if conf.version {
+		log.Printf("mm-geofeed-verifier %s", version)
+		os.Exit(0)
 	}
 
 	if conf.gf == "" && conf.db == "" {
@@ -104,12 +132,12 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 	return &conf, buf.String(), nil
 }
 
-func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, error) {
+func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, []string, map[uint]int, error) {
 	var c counts
 	var diffLines []string
 	geofeedFH, err := utfutil.OpenFile(filepath.Clean(geofeedFilename), utfutil.UTF8)
 	if err != nil {
-		return c, diffLines, err
+		return c, diffLines, nil, err
 	}
 	defer func() {
 		if err := geofeedFH.Close(); err != nil {
@@ -119,13 +147,19 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, err
 
 	db, err := geoip2.Open(filepath.Clean(mmdbFilename))
 	if err != nil {
-		return c, diffLines, err
+		return c, diffLines, nil, err
 	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			log.Println(err)
+	defer db.Close()
+
+	var ispdb *geoip2.Reader
+	if len(ispFilename) > 0 {
+		ispdb, err = geoip2.Open(filepath.Clean(ispFilename))
+		if err != nil {
+			return c, diffLines, nil, err
 		}
-	}()
+		defer ispdb.Close()
+	}
+	asnCounts := make(map[uint]int)
 
 	csvReader := csv.NewReader(geofeedFH)
 	csvReader.ReuseRecord = true
@@ -144,10 +178,10 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, err
 		}
 		rowCount++
 		if err != nil {
-			return c, diffLines, err
+			return c, diffLines, asnCounts, err
 		}
 		if len(row) < expectedFieldsPerRecord {
-			return c, nil, fmt.Errorf(
+			return c, nil, nil, fmt.Errorf(
 				"saw fewer than the expected %d fields at line %d",
 				expectedFieldsPerRecord,
 				rowCount,
@@ -155,21 +189,23 @@ func processGeofeed(geofeedFilename, mmdbFilename string) (counts, []string, err
 		}
 
 		c.total++
-		currentCorrectionCount, diffLine, err := verifyCorrection(row[:expectedFieldsPerRecord], db)
-		diffLines = append(diffLines, diffLine)
+		diffLine, err := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts)
 		if err != nil {
-			return c, diffLines, err
+			return c, diffLines, asnCounts, err
 		}
 
-		c.differences += currentCorrectionCount
+		if len(diffLine) > 0 {
+			diffLines = append(diffLines, diffLine)
+			c.differences++
+		}
 	}
 	if err != nil && err != io.EOF {
-		return c, diffLines, err
+		return c, diffLines, asnCounts, err
 	}
-	return c, diffLines, nil
+	return c, diffLines, asnCounts, nil
 }
 
-func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, error) {
+func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts map[uint]int) (string, error) {
 	/*
 	   0: network (CIDR or single IP)
 	   1: ISO-3166 country code
@@ -184,7 +220,7 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 
 	networkOrIP := correction[0]
 	if networkOrIP == "" {
-		return 0, "", errors.New("network field is empty")
+		return "", errors.New("network field is empty")
 	}
 	if !(strings.Contains(networkOrIP, "/")) {
 		if strings.Contains(networkOrIP, ":") {
@@ -195,12 +231,12 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 	}
 	network, _, err := net.ParseCIDR(networkOrIP)
 	if err != nil {
-		return 0, "", err
+		return "", err
 	}
 
 	mmdbRecord, err := db.City(network)
 	if err != nil {
-		return 0, "", err
+		return "", err
 	}
 
 	firstSubdivision := ""
@@ -211,6 +247,22 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 	// but we accept just the region code part
 	if strings.Contains(correction[2], "-") {
 		firstSubdivision = mmdbRecord.Country.IsoCode + "-" + firstSubdivision
+	}
+
+	asNumber := uint(0)
+	asName := ""
+	ispName := ""
+	if ispdb != nil {
+		ispRecord, err := ispdb.ISP(network)
+		if err != nil {
+			return "", err
+		}
+		asNumber = ispRecord.AutonomousSystemNumber
+		asName = ispRecord.AutonomousSystemOrganization
+		ispName = ispRecord.ISP
+	}
+	if asNumber > 0 {
+		asnCounts[asNumber]++
 	}
 
 	const indent = "\t\t"
@@ -259,7 +311,7 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 
 	// if no postal code is provided in the correction, do not report on any
 	// differences; postal codes are frequently omitted, and as of 2020-08-01 are
-	// the postal code field is considered deprecated
+	// the postal code field is considered deprecated in RFC 8805
 	if correction[4] != "" && !(strings.EqualFold(correction[4], mmdbRecord.Postal.Code)) {
 		foundDiff = true
 		lines = append(
@@ -275,7 +327,36 @@ func verifyCorrection(correction []string, db *geoip2.Reader) (int, string, erro
 	}
 
 	if foundDiff {
-		return 1, strings.Join(lines, "\n"+indent), nil
+
+		if asNumber > 0 {
+			lines = append(
+				lines,
+				fmt.Sprintf(
+					"AS Number: %d",
+					asNumber,
+				),
+			)
+		}
+		if asName != "" {
+			lines = append(
+				lines,
+				fmt.Sprintf(
+					"AS Name: %s",
+					asName,
+				),
+			)
+		}
+		if ispName != "" {
+			lines = append(
+				lines,
+				fmt.Sprintf(
+					"ISP Name: %s",
+					ispName,
+				),
+			)
+		}
+
+		return strings.Join(lines, "\n"+indent), nil
 	}
-	return 0, "", nil
+	return "", nil
 }

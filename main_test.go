@@ -142,7 +142,7 @@ func TestProcessGeofeed(t *testing.T) {
 	for _, test := range goodTests {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
-				c, dl, err := processGeofeed(test.gf, test.db)
+				c, dl, _, err := processGeofeed(test.gf, test.db, "")
 				assert.NoError(t, err, "processGeofeed ran without error")
 				for i, s := range test.dl {
 					assert.Contains(
@@ -177,7 +177,7 @@ func TestProcessGeofeed(t *testing.T) {
 	for _, test := range badTests {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
-				_, _, err := processGeofeed(test.gf, test.db)
+				_, _, _, err := processGeofeed(test.gf, test.db, "")
 				assert.EqualError(
 					t,
 					err,
