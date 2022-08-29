@@ -1,15 +1,12 @@
+// This script is meant to help verify 'bulk correction' files for submission
+// to MaxMind. The files are expected to (mostly) follow the format provided by the RFC at
+// https://datatracker.ietf.org/doc/rfc8805/
+// Region codes without the country prefix are accepted. eg, 'NY' is allowed, along with
+// 'US-NY' for the state of New York in the United States.
+// Beyond verifying that the format of the data is correct, the script will also compare
+// the corrections against a given MMDB, reporting on how many corrections differ from
+// the contents in the database.
 package main
-
-/*
-This script is meant to help verify 'bulk correction' files for submission
-to MaxMind. The files are expected to (mostly) follow the format provided by the RFC at
-https://datatracker.ietf.org/doc/rfc8805/
-Region codes without the country prefix are accepted. eg, 'NY' is allowed, along with
-'US-NY' for the state of New York in the United States.
-Beyond verifying that the format of the data is correct, the script will also compare
-the corrections against a given MMDB, reporting on how many corrections differ from
-the contents in the database.
-*/
 
 import (
 	"bytes"
@@ -111,6 +108,7 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 
 	if conf.version {
 		log.Printf("mm-geofeed-verifier %s", version)
+		//nolint:revive // preexisting
 		os.Exit(0)
 	}
 
@@ -173,7 +171,7 @@ func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, 
 
 	for {
 		row, err := csvReader.Read()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		rowCount++
@@ -199,7 +197,7 @@ func processGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (counts, 
 			c.differences++
 		}
 	}
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return c, diffLines, asnCounts, err
 	}
 	return c, diffLines, asnCounts, nil
@@ -323,11 +321,9 @@ func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts m
 				correction[4],
 			),
 		)
-
 	}
 
 	if foundDiff {
-
 		if asNumber > 0 {
 			lines = append(
 				lines,
