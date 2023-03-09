@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/maxmind/mm-geofeed-verifier/verify"
 )
 
 type parseFlagsCorrectTest struct {
@@ -116,7 +118,7 @@ type processGeofeedTest struct {
 	gf string
 	db string
 	dl []string
-	c  counts
+	c  verify.Counts
 	em string
 }
 
@@ -129,9 +131,9 @@ func TestProcessGeofeed(t *testing.T) {
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
-			counts{
-				2,
-				2,
+			verify.Counts{
+				Total:       2,
+				Differences: 2,
 			},
 			"",
 		},
@@ -142,7 +144,7 @@ func TestProcessGeofeed(t *testing.T) {
 	for _, test := range goodTests {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
-				c, dl, _, err := processGeofeed(test.gf, test.db, "")
+				c, dl, _, err := verify.ProcessGeofeed(test.gf, test.db, "")
 				assert.NoError(t, err, "processGeofeed ran without error")
 				for i, s := range test.dl {
 					assert.Contains(
@@ -162,14 +164,14 @@ func TestProcessGeofeed(t *testing.T) {
 			"test_data/geofeed-missing-fields.csv",
 			"test_data/GeoIP2-City-Test.mmdb",
 			[]string{},
-			counts{},
+			verify.Counts{},
 			"saw fewer than the expected 5 fields at line 1",
 		},
 		{
 			gf: "test_data/geofeed-empty-network.csv",
 			db: "test_data/GeoIP2-City-Test.mmdb",
 			dl: []string{},
-			c:  counts{},
+			c:  verify.Counts{},
 			em: "network field is empty",
 		},
 	}
@@ -177,7 +179,7 @@ func TestProcessGeofeed(t *testing.T) {
 	for _, test := range badTests {
 		t.Run(
 			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
-				_, _, _, err := processGeofeed(test.gf, test.db, "")
+				_, _, _, err := verify.ProcessGeofeed(test.gf, test.db, "")
 				assert.EqualError(
 					t,
 					err,
