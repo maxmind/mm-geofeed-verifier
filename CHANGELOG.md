@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+## 2.2.1 (2023-03-09)
+
+* Moved ProcessGeofeed to `verify` sub-package.
+
+## 2.2.0 (2022-08-29)
+
+* Update to Go version 1.18
+
 ## 2.1.0 (2021-06-16)
 
 * Fix handling of extra fields (reported by Raiko Wielk)
