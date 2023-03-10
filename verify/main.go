@@ -17,7 +17,8 @@ import (
 	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
-// Counts blah blah.
+// Counts holds the total number of rows for a geofeed file
+// as well as the number of rows that differ from expected mmdb values.
 type Counts struct {
 	Total       int
 	Differences int
