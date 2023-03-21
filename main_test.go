@@ -143,7 +143,7 @@ func TestProcessGeofeed(t *testing.T) {
 	// tedious and brittle, so we will just check for some substrings.
 	for _, test := range goodTests {
 		t.Run(
-			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
+			test.gf+" "+test.db, func(t *testing.T) {
 				c, dl, _, err := verify.ProcessGeofeed(test.gf, test.db, "")
 				assert.NoError(t, err, "processGeofeed ran without error")
 				for i, s := range test.dl {
@@ -178,7 +178,7 @@ func TestProcessGeofeed(t *testing.T) {
 
 	for _, test := range badTests {
 		t.Run(
-			strings.Join([]string{test.gf, test.db}, " "), func(t *testing.T) {
+			test.gf+" "+test.db, func(t *testing.T) {
 				_, _, _, err := verify.ProcessGeofeed(test.gf, test.db, "")
 				assert.EqualError(
 					t,
