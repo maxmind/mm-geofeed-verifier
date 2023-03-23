@@ -1,12 +1,11 @@
 ## CHANGELOG
 
-## 2.2.1 (2023-03-09)
-
-* Moved ProcessGeofeed to `verify` sub-package.
-
-## 2.2.0 (2022-08-29)
+## 2.2.0 (2023-03-21)
 
 * Update to Go version 1.18
+* Moved ProcessGeofeed to `verify` sub-package to allow the use of this code as a library
+* add version argument
+* optionally include ISP/ASN information in output
 
 ## 2.1.0 (2021-06-16)
 

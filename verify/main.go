@@ -30,7 +30,7 @@ func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, 
 	var diffLines []string
 	geofeedFH, err := utfutil.OpenFile(filepath.Clean(geofeedFilename), utfutil.UTF8)
 	if err != nil {
-		return c, diffLines, nil, err
+		return c, diffLines, nil, fmt.Errorf("unable to open %s: %w", geofeedFilename, err)
 	}
 	defer func() {
 		if err := geofeedFH.Close(); err != nil {
@@ -40,7 +40,7 @@ func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, 
 
 	db, err := geoip2.Open(filepath.Clean(mmdbFilename))
 	if err != nil {
-		return c, diffLines, nil, err
+		return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", mmdbFilename, err)
 	}
 	defer db.Close()
 
@@ -48,7 +48,7 @@ func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, 
 	if len(ispFilename) > 0 {
 		ispdb, err = geoip2.Open(filepath.Clean(ispFilename))
 		if err != nil {
-			return c, diffLines, nil, err
+			return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", ispFilename, err)
 		}
 		defer ispdb.Close()
 	}
@@ -71,7 +71,8 @@ func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, 
 		}
 		rowCount++
 		if err != nil {
-			return c, diffLines, asnCounts, err
+			return c, diffLines, asnCounts,
+				fmt.Errorf("unable to read next row in %s: %w", geofeedFilename, err)
 		}
 		if len(row) < expectedFieldsPerRecord {
 			return c, nil, nil, fmt.Errorf(
@@ -93,7 +94,8 @@ func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, 
 		}
 	}
 	if err != nil && !errors.Is(err, io.EOF) {
-		return c, diffLines, asnCounts, err
+		return c, diffLines, asnCounts,
+			fmt.Errorf("error while reading %s: %w", geofeedFilename, err)
 	}
 	return c, diffLines, asnCounts, nil
 }
@@ -122,14 +124,14 @@ func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts m
 			networkOrIP += "/32"
 		}
 	}
-	network, _, err := net.ParseCIDR(networkOrIP)
+	network, _, err := net.ParseCIDR(networkOrIP) //nolint:forbidigo // use of net is ok for now
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("unable to parse network %s: %w", networkOrIP, err)
 	}
 
 	mmdbRecord, err := db.City(network)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("unable to find city record for %s: %w", networkOrIP, err)
 	}
 
 	firstSubdivision := ""
@@ -148,7 +150,7 @@ func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts m
 	if ispdb != nil {
 		ispRecord, err := ispdb.ISP(network)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("unable to find ISP record for %s: %w", networkOrIP, err)
 		}
 		asNumber = ispRecord.AutonomousSystemNumber
 		asName = ispRecord.AutonomousSystemOrganization

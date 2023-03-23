@@ -46,7 +46,7 @@ func run() error {
 
 	c, diffLines, asnCounts, err := verify.ProcessGeofeed(conf.gf, conf.db, conf.isp)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to process geofeed %s: %w", conf.gf, err)
 	}
 
 	fmt.Printf(
