@@ -165,7 +165,7 @@ func TestProcessGeofeed(t *testing.T) {
 			"test_data/GeoIP2-City-Test.mmdb",
 			[]string{},
 			verify.Counts{},
-			"saw fewer than the expected 5 fields at line 1",
+			"saw fewer than the expected 5 fields at line 1: '2a02:ecc0::/29,US,US-NJ,Parsippany'",
 		},
 		{
 			gf: "test_data/geofeed-empty-network.csv",

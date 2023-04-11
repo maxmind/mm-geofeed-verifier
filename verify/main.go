@@ -76,9 +76,10 @@ func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, 
 		}
 		if len(row) < expectedFieldsPerRecord {
 			return c, nil, nil, fmt.Errorf(
-				"saw fewer than the expected %d fields at line %d",
+				"saw fewer than the expected %d fields at line %d: '%s'",
 				expectedFieldsPerRecord,
 				rowCount,
+				strings.Join(row, ","),
 			)
 		}
 
