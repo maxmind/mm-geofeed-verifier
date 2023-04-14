@@ -28,6 +28,9 @@ type Counts struct {
 func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, []string, map[uint]int, error) {
 	var c Counts
 	var diffLines []string
+
+	// Use utfutil to remove a BOM, if present (common on files from Windows).
+	// See https://github.com/golang/go/issues/33887.
 	geofeedFH, err := utfutil.OpenFile(filepath.Clean(geofeedFilename), utfutil.UTF8)
 	if err != nil {
 		return c, diffLines, nil, fmt.Errorf("unable to open %s: %w", geofeedFilename, err)
