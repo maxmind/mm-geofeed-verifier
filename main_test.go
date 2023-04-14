@@ -132,7 +132,7 @@ func TestProcessGeofeed(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			verify.Counts{
-				Total:       2,
+				Total:       3,
 				Differences: 2,
 			},
 			"",
