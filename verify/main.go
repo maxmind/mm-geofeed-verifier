@@ -138,14 +138,14 @@ func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts m
 		return "", fmt.Errorf("unable to find city record for %s: %w", networkOrIP, err)
 	}
 
-	firstSubdivision := ""
+	mostSpecificSubdivision := ""
 	if len(mmdbRecord.Subdivisions) > 0 {
-		firstSubdivision = mmdbRecord.Subdivisions[0].IsoCode
+		mostSpecificSubdivision = mmdbRecord.Subdivisions[len(mmdbRecord.Subdivisions)-1].IsoCode
 	}
 	// ISO-3166-2 region codes are prefixed with the ISO country code,
 	// but we accept just the region code part
 	if strings.Contains(correction[2], "-") {
-		firstSubdivision = mmdbRecord.Country.IsoCode + "-" + firstSubdivision
+		mostSpecificSubdivision = mmdbRecord.Country.IsoCode + "-" + mostSpecificSubdivision
 	}
 
 	asNumber := uint(0)
@@ -182,13 +182,13 @@ func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts m
 		)
 	}
 
-	if !(strings.EqualFold(correction[2], firstSubdivision)) {
+	if !(strings.EqualFold(correction[2], mostSpecificSubdivision)) {
 		foundDiff = true
 		lines = append(
 			lines,
 			fmt.Sprintf(
 				"current region: '%s'%ssuggested region: '%s'",
-				firstSubdivision,
+				mostSpecificSubdivision,
 				indent,
 				correction[2],
 			),
