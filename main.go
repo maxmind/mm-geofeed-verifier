@@ -28,6 +28,7 @@ type config struct {
 	db      string
 	isp     string
 	version bool
+	laxMode bool
 }
 
 func main() {
@@ -44,7 +45,7 @@ func run() error {
 		return err
 	}
 
-	c, diffLines, asnCounts, err := verify.ProcessGeofeed(conf.gf, conf.db, conf.isp)
+	c, diffLines, asnCounts, err := verify.ProcessGeofeed(conf.gf, conf.db, conf.isp, conf.laxMode)
 	if err != nil {
 		return fmt.Errorf("unable to process geofeed %s: %w", conf.gf, err)
 	}
@@ -89,6 +90,11 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 		"Path to MMDB file to compare geofeed file against",
 	)
 	flags.BoolVar(&conf.version, "V", false, "Display version")
+	flags.BoolVar(
+		&conf.laxMode,
+		"lax",
+		false,
+		"Enable lax mode: geofeed's region code may be provided without country code prefix")
 
 	err = flags.Parse(args)
 	if err != nil {

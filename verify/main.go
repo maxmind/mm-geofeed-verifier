@@ -25,7 +25,14 @@ type Counts struct {
 }
 
 // ProcessGeofeed attempts to validate a given geofeedFilename.
-func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, []string, map[uint]int, error) {
+// If laxMode is false (default), ISO-3166-2 region codes format is required.
+// Otherwise region code is accepted both with or without country code.
+func ProcessGeofeed(
+	geofeedFilename,
+	mmdbFilename,
+	ispFilename string,
+	laxMode bool,
+) (Counts, []string, map[uint]int, error) {
 	var c Counts
 	var diffLines []string
 
@@ -87,9 +94,9 @@ func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, 
 		}
 
 		c.Total++
-		diffLine, err := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts)
+		diffLine, err := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts, laxMode)
 		if err != nil {
-			return c, diffLines, asnCounts, err
+			return c, diffLines, asnCounts, fmt.Errorf("line %d: %w", rowCount, err)
 		}
 
 		if len(diffLine) > 0 {
@@ -104,7 +111,12 @@ func ProcessGeofeed(geofeedFilename, mmdbFilename, ispFilename string) (Counts, 
 	return c, diffLines, asnCounts, nil
 }
 
-func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts map[uint]int) (string, error) {
+func verifyCorrection(
+	correction []string,
+	db, ispdb *geoip2.Reader,
+	asnCounts map[uint]int,
+	laxMode bool,
+) (string, error) {
 	/*
 	   0: network (CIDR or single IP)
 	   1: ISO-3166 country code
@@ -143,9 +155,13 @@ func verifyCorrection(correction []string, db, ispdb *geoip2.Reader, asnCounts m
 		mostSpecificSubdivision = mmdbRecord.Subdivisions[len(mmdbRecord.Subdivisions)-1].IsoCode
 	}
 	// ISO-3166-2 region codes are prefixed with the ISO country code,
-	// but we accept just the region code part
+	// in strict (default) mode we require this format.
+	// In "--lax" mode both region code formats (with or without country code) are accepted.
 	if strings.Contains(correction[2], "-") {
 		mostSpecificSubdivision = mmdbRecord.Country.IsoCode + "-" + mostSpecificSubdivision
+	} else if correction[2] != "" && !laxMode {
+		return "", fmt.Errorf("invalid ISO 3166-2 region code format in strict (default) mode, line: '%s'",
+			strings.Join(correction, ","))
 	}
 
 	asNumber := uint(0)
