@@ -6,7 +6,17 @@ makes some comparisons to a given MMDB, typically the latest available GeoIP2-Ci
 
 ## Usage
 
+#### Default strict mode
+
+By default strict mode requires exact ISO-3166-2 format compliance for region codes:
+
 `mm-geofeed-verifier -gf /path/to/geofeed-formatted-file -db /path/to/Database.mmdb`
+
+#### Lax mode
+
+Use `--lax` mode to allow region codes to be provided without ISO-3166 country code prefix:
+
+`mm-geofeed-verifier --lax -gf /path/to/geofeed-formatted-file -db /path/to/Database.mmdb`
 
 ## Installation and release
 
