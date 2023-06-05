@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	//nolint:depguard // preexisting
 	"sort"
 	"strings"
 
