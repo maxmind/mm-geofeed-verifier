@@ -10,4 +10,4 @@
 * Commit `CHANGELOG.md`.
 * Tag the release: `git tag -a v1.2.3 -m 'Tag v1.2.3'`.
 * Push the tag: `git push origin v1.2.3`.
-* Run `gorelease
+* Run `goreleaser`
