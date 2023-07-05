@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+## 2.3.0 (2023-07-05)
+
+* Compare subdivisions in corrections to most specific, instead of least
+  specific, subdivision in MMDB file
+* Add optional 'lax' mode that does not require country prefix for ISO-3166 code
+
 ## 2.2.0 (2023-03-21)
 
 * Update to Go version 1.18
