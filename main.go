@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/maxmind/mm-geofeed-verifier/verify"
+	"github.com/maxmind/mm-geofeed-verifier/v2/verify"
 )
 
 const version = "2.2.1"
