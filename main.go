@@ -22,7 +22,9 @@ import (
 	"github.com/maxmind/mm-geofeed-verifier/v2/verify"
 )
 
-const version = "2.2.1"
+// This value is set by build scripts. Changing the name of
+// the variable should be considered a breaking change.
+var version = "unknown"
 
 type config struct {
 	gf      string
