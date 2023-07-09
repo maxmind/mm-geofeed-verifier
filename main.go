@@ -30,7 +30,6 @@ type config struct {
 	gf      string
 	db      string
 	isp     string
-	version bool
 	laxMode bool
 }
 
@@ -50,6 +49,12 @@ func run() error {
 
 	c, diffLines, asnCounts, err := verify.ProcessGeofeed(conf.gf, conf.db, conf.isp, conf.laxMode)
 	if err != nil {
+		if errors.Is(err, verify.ErrInvalidGeofeed) {
+			log.Printf("Found %d invalid rows out of %d rows in total, examples by type:", c.Invalid, c.Total)
+			for invType, invMessage := range c.SampleInvalidRows {
+				log.Printf("%s: '%s'", invType, invMessage)
+			}
+		}
 		return fmt.Errorf("unable to process geofeed %s: %w", conf.gf, err)
 	}
 
@@ -92,7 +97,8 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 		"/usr/local/share/GeoIP/GeoIP2-City.mmdb",
 		"Path to MMDB file to compare geofeed file against",
 	)
-	flags.BoolVar(&conf.version, "V", false, "Display version")
+	displayVersion := false
+	flags.BoolVar(&displayVersion, "V", false, "Display version")
 	flags.BoolVar(
 		&conf.laxMode,
 		"lax",
@@ -104,7 +110,7 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 		return nil, buf.String(), err
 	}
 
-	if conf.version {
+	if displayVersion {
 		log.Printf("mm-geofeed-verifier %s", version)
 		//nolint:revive // preexisting
 		os.Exit(0)
