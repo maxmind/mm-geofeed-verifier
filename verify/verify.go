@@ -17,11 +17,25 @@ import (
 	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
-// Counts holds the total number of rows for a geofeed file
-// as well as the number of rows that differ from expected mmdb values.
-type Counts struct {
-	Total       int
-	Differences int
+// CheckResult holds the total number of rows for a geofeed file,
+// the number of rows that differ from expected mmdb values as well
+// as information about the rows that failed validation.
+// To create new CheckResult instance use NewCheckResult() func.
+type CheckResult struct {
+	Total             int
+	Differences       int
+	Invalid           int
+	SampleInvalidRows map[RowInvalidity]string
+}
+
+// NewCheckResult returns new CheckResult instance.
+func NewCheckResult() CheckResult {
+	return CheckResult{
+		Total:             0,
+		Differences:       0,
+		Invalid:           0,
+		SampleInvalidRows: map[RowInvalidity]string{},
+	}
 }
 
 // ProcessGeofeed attempts to validate a given geofeedFilename.
@@ -32,8 +46,8 @@ func ProcessGeofeed(
 	mmdbFilename,
 	ispFilename string,
 	laxMode bool,
-) (Counts, []string, map[uint]int, error) {
-	var c Counts
+) (CheckResult, []string, map[uint]int, error) { //nolint:unparam // false positive on map[uint]int
+	c := NewCheckResult()
 	var diffLines []string
 
 	// Use utfutil to remove a BOM, if present (common on files from Windows).
@@ -72,31 +86,43 @@ func ProcessGeofeed(
 
 	const expectedFieldsPerRecord = 5
 
-	rowCount := 0
-
 	for {
 		row, err := csvReader.Read()
 		if errors.Is(err, io.EOF) {
 			break
 		}
-		rowCount++
 		if err != nil {
 			return c, diffLines, asnCounts,
 				fmt.Errorf("unable to read next row in %s: %w", geofeedFilename, err)
 		}
-		if len(row) < expectedFieldsPerRecord {
-			return c, nil, nil, fmt.Errorf(
-				"saw fewer than the expected %d fields at line %d: '%s'",
-				expectedFieldsPerRecord,
-				rowCount,
-				strings.Join(row, ","),
-			)
-		}
 
 		c.Total++
-		diffLine, err := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts, laxMode)
-		if err != nil {
-			return c, diffLines, asnCounts, fmt.Errorf("line %d: %w", rowCount, err)
+
+		if len(row) < expectedFieldsPerRecord {
+			if _, ok := c.SampleInvalidRows[FewerFieldsThanExpected]; !ok {
+				c.SampleInvalidRows[FewerFieldsThanExpected] = fmt.Sprintf(
+					"line %d: expected %d fields but got %d, row: '%s'",
+					c.Total,
+					expectedFieldsPerRecord,
+					len(row),
+					strings.Join(row, ","),
+				)
+			}
+			c.Invalid++
+			continue
+		}
+
+		diffLine, result := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts, laxMode)
+		if !result.valid {
+			if _, ok := c.SampleInvalidRows[result.invalidityType]; !ok {
+				c.SampleInvalidRows[result.invalidityType] = fmt.Sprintf(
+					"line %d: %s",
+					c.Total,
+					result.invalidityReason,
+				)
+			}
+			c.Invalid++
+			continue
 		}
 
 		if len(diffLine) > 0 {
@@ -108,7 +134,18 @@ func ProcessGeofeed(
 		return c, diffLines, asnCounts,
 			fmt.Errorf("error while reading %s: %w", geofeedFilename, err)
 	}
+
+	if c.Invalid > 0 || len(c.SampleInvalidRows) > 0 {
+		return c, diffLines, asnCounts, ErrInvalidGeofeed
+	}
+
 	return c, diffLines, asnCounts, nil
+}
+
+type verificationResult struct {
+	valid            bool
+	invalidityType   RowInvalidity
+	invalidityReason string
 }
 
 func verifyCorrection(
@@ -116,7 +153,7 @@ func verifyCorrection(
 	db, ispdb *geoip2.Reader,
 	asnCounts map[uint]int,
 	laxMode bool,
-) (string, error) {
+) (string, verificationResult) {
 	/*
 	   0: network (CIDR or single IP)
 	   1: ISO-3166 country code
@@ -131,7 +168,11 @@ func verifyCorrection(
 
 	networkOrIP := correction[0]
 	if networkOrIP == "" {
-		return "", errors.New("network field is empty")
+		return "", verificationResult{
+			valid:            false,
+			invalidityType:   EmptyNetwork,
+			invalidityReason: fmt.Sprintf("network field is empty, row: '%s'", strings.Join(correction, ",")),
+		}
 	}
 	if !(strings.Contains(networkOrIP, "/")) {
 		if strings.Contains(networkOrIP, ":") {
@@ -142,12 +183,20 @@ func verifyCorrection(
 	}
 	network, _, err := net.ParseCIDR(networkOrIP) //nolint:forbidigo // use of net is ok for now
 	if err != nil {
-		return "", fmt.Errorf("unable to parse network %s: %w", networkOrIP, err)
+		return "", verificationResult{
+			valid:            false,
+			invalidityType:   UnableToParseNetwork,
+			invalidityReason: fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
+		}
 	}
 
 	mmdbRecord, err := db.City(network)
 	if err != nil {
-		return "", fmt.Errorf("unable to find city record for %s: %w", networkOrIP, err)
+		return "", verificationResult{
+			valid:            false,
+			invalidityType:   UnableToFindCityRecord,
+			invalidityReason: fmt.Sprintf("unable to find city record for %s: %s", networkOrIP, err),
+		}
 	}
 
 	mostSpecificSubdivision := ""
@@ -160,8 +209,14 @@ func verifyCorrection(
 	if strings.Contains(correction[2], "-") {
 		mostSpecificSubdivision = mmdbRecord.Country.IsoCode + "-" + mostSpecificSubdivision
 	} else if correction[2] != "" && !laxMode {
-		return "", fmt.Errorf("invalid ISO 3166-2 region code format in strict (default) mode, line: '%s'",
-			strings.Join(correction, ","))
+		return "", verificationResult{
+			valid:          false,
+			invalidityType: InvalidRegionCode,
+			invalidityReason: fmt.Sprintf(
+				"invalid ISO 3166-2 region code format in strict (default) mode, row: '%s'",
+				strings.Join(correction, ","),
+			),
+		}
 	}
 
 	asNumber := uint(0)
@@ -170,7 +225,11 @@ func verifyCorrection(
 	if ispdb != nil {
 		ispRecord, err := ispdb.ISP(network)
 		if err != nil {
-			return "", fmt.Errorf("unable to find ISP record for %s: %w", networkOrIP, err)
+			return "", verificationResult{
+				valid:            false,
+				invalidityType:   UnableToFindISPRecord,
+				invalidityReason: fmt.Sprintf("unable to find ISP record for %s: %s", networkOrIP, err),
+			}
 		}
 		asNumber = ispRecord.AutonomousSystemNumber
 		asName = ispRecord.AutonomousSystemOrganization
@@ -269,7 +328,15 @@ func verifyCorrection(
 			)
 		}
 
-		return strings.Join(lines, "\n"+indent), nil
+		return strings.Join(lines, "\n"+indent), verificationResult{
+			valid:            true,
+			invalidityType:   RowInvalidity(-1),
+			invalidityReason: "",
+		}
 	}
-	return "", nil
+	return "", verificationResult{
+		valid:            true,
+		invalidityType:   RowInvalidity(-1),
+		invalidityReason: "",
+	}
 }
