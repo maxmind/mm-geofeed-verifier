@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+## 2.4.0 (2023-07-13)
+
+* Update files to comply with major release version 2
+* Automate version fetching from git release tag
+* Do not fail immediately on invalid row, but return custom error along with 
+  stats and examples of rows that are not compliant with RFC 8805 standard
+
 ## 2.3.0 (2023-07-05)
 
 * Compare subdivisions in corrections to most specific, instead of least
