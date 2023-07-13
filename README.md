@@ -29,9 +29,9 @@ archive. Inside is the `mm-geofeed-verifier` binary.
 You need the Go compiler (Go 1.12+). You can get it at the [Go
 website](https://golang.org).
 
-The easiest way is via `go get`:
+The easiest way is via `go install`:
 
-    $ go get -u github.com/maxmind/mm-geofeed-verifier
+    $ go install github.com/maxmind/mm-geofeed-verifier/v2@latest
 
 The program will be installed to `$GOPATH/bin/mm-geofeed-verifier`.
 

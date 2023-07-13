@@ -3,6 +3,8 @@ builds:
         - darwin
         - linux
         - windows
+    - ldflags:
+        - '-X main.version={{.Version}}'
 archives:
     -
       wrap_in_directory: true
