@@ -1,10 +1,12 @@
 builds:
-    - goos:
-        - darwin
-        - linux
-        - windows
-    - ldflags:
-        - '-X main.version={{.Version}}'
+  - id: 'mm-geofeed-verifier'
+    main: '.'
+    goos:
+      - darwin
+      - linux
+      - windows
+    ldflags:
+      - '-X main.version={{.Version}}'
 archives:
     -
       wrap_in_directory: true
