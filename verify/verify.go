@@ -69,7 +69,7 @@ func ProcessGeofeed(
 	defer db.Close()
 
 	var ispdb *geoip2.Reader
-	if len(ispFilename) > 0 {
+	if ispFilename != "" {
 		ispdb, err = geoip2.Open(filepath.Clean(ispFilename))
 		if err != nil {
 			return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", ispFilename, err)
@@ -125,7 +125,7 @@ func ProcessGeofeed(
 			continue
 		}
 
-		if len(diffLine) > 0 {
+		if diffLine != "" {
 			diffLines = append(diffLines, diffLine)
 			c.Differences++
 		}
