@@ -1,6 +1,6 @@
 module github.com/maxmind/mm-geofeed-verifier/v2
 
-go 1.18
+go 1.21
 
 require (
 	github.com/TomOnTime/utfutil v0.0.0-20200626160131-0b0178852c8f

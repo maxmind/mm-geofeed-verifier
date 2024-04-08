@@ -15,8 +15,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	//nolint:depguard // preexisting
-	"sort"
+	"sort" //nolint:depguard // preexisting
 	"strings"
 
 	"github.com/maxmind/mm-geofeed-verifier/v2/verify"
@@ -119,7 +118,7 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 	if conf.gf == "" && conf.db == "" {
 		flags.PrintDefaults()
 		return nil, buf.String(), errors.New(
-			"-gf is required and -db can not be an emptry string",
+			"-gf is required and -db can not be an empty string",
 		)
 	}
 	if conf.gf == "" {

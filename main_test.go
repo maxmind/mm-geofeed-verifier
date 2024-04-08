@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type parseFlagsCorrectTest struct {
@@ -65,7 +66,7 @@ func TestParseFlagsCorrect(t *testing.T) {
 	for _, test := range tests {
 		t.Run(strings.Join(test.args, " "), func(t *testing.T) {
 			conf, output, err := parseFlags("program", test.args)
-			assert.NoError(t, err, "parseFlags ran without error")
+			require.NoError(t, err, "parseFlags ran without error")
 			assert.Empty(t, output, "parseFlags ran without output")
 			assert.Equal(t, test.conf, *conf, "parseFlags produced expected config")
 		})
@@ -101,7 +102,7 @@ func TestParseFlagsError(t *testing.T) {
 		{
 			[]string{"-db", ""},
 			"Path to local geofeed file",
-			"-gf is required and -db can not be an emptry string",
+			"-gf is required and -db can not be an empty string",
 		},
 		{
 			[]string{"-db", "file.mdb"},
