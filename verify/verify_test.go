@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type processGeofeedTest struct {
@@ -81,7 +82,7 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 		t.Run(
 			test.gf+" "+test.db, func(t *testing.T) {
 				c, dl, _, err := ProcessGeofeed(test.gf, test.db, "", test.laxMode)
-				assert.NoError(t, err, "processGeofeed ran without error")
+				require.NoError(t, err, "processGeofeed ran without error")
 				for i, s := range test.dl {
 					assert.Contains(
 						t,
@@ -167,7 +168,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 		t.Run(
 			test.gf+" "+test.db, func(t *testing.T) {
 				c, _, _, err := ProcessGeofeed(test.gf, test.db, "", test.laxMode)
-				assert.ErrorIs(
+				require.ErrorIs(
 					t,
 					err,
 					test.em,

@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/TomOnTime/utfutil"
-
 	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
@@ -76,7 +75,7 @@ func ProcessGeofeed(
 		}
 		defer ispdb.Close()
 	}
-	asnCounts := make(map[uint]int)
+	asnCounts := map[uint]int{}
 
 	csvReader := csv.NewReader(geofeedFH)
 	csvReader.ReuseRecord = true
@@ -312,19 +311,13 @@ func verifyCorrection(
 		if asName != "" {
 			lines = append(
 				lines,
-				fmt.Sprintf(
-					"AS Name: %s",
-					asName,
-				),
+				"AS Name: "+asName,
 			)
 		}
 		if ispName != "" {
 			lines = append(
 				lines,
-				fmt.Sprintf(
-					"ISP Name: %s",
-					ispName,
-				),
+				"ISP Name: "+ispName,
 			)
 		}
 
