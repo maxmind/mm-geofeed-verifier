@@ -1,4 +1,4 @@
-module github.com/maxmind/mm-geofeed-verifier/v2
+module github.com/maxmind/mm-geofeed-verifier/v3
 
 go 1.21
 

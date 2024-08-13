@@ -18,7 +18,7 @@ import (
 	"sort" //nolint:depguard // preexisting
 	"strings"
 
-	"github.com/maxmind/mm-geofeed-verifier/v2/verify"
+	"github.com/maxmind/mm-geofeed-verifier/v3/verify"
 )
 
 // This value is set by build scripts. Changing the name of
@@ -46,7 +46,12 @@ func run() error {
 		return err
 	}
 
-	c, diffLines, asnCounts, err := verify.ProcessGeofeed(conf.gf, conf.db, conf.isp, conf.laxMode)
+	c, diffLines, asnCounts, err := verify.ProcessGeofeed(
+		conf.gf,
+		conf.db,
+		conf.isp,
+		verify.Options{LaxMode: conf.laxMode},
+	)
 	if err != nil {
 		if errors.Is(err, verify.ErrInvalidGeofeed) {
 			log.Printf("Found %d invalid rows out of %d rows in total, examples by type:", c.Invalid, c.Total)
