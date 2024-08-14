@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+## 3.0.0 (2024-08-14)
+
+* Update interface of ProcessGeofeed in the verifier package, adding a new
+  struct to hold verification options. This will make it easier to add/remove
+  options in the future.
+* Add an option to ProcessGeofeed to reduce the verbosity of error messages,
+  toggling whether file paths are included.
+
 ## 2.4.0 (2023-07-13)
 
 * Update files to comply with major release version 2

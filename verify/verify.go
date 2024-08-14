@@ -37,14 +37,24 @@ func NewCheckResult() CheckResult {
 	}
 }
 
+// Options contains configuration options for geofeed verification.
+type Options struct {
+	// // LaxMode controls validation for region codes. If LaxMode is false
+	// (default), ISO-3166-2 region codes format is required. Otherwise region
+	// code is accepted both with or without country code.
+	LaxMode bool
+	// HideFilePathsInErrorMessages, if set to true, will prevent file paths
+	// from appearing in error messages. This reduces information leakage in
+	// contexts where the error messages might be shared.
+	HideFilePathsInErrorMessages bool
+}
+
 // ProcessGeofeed attempts to validate a given geofeedFilename.
-// If laxMode is false (default), ISO-3166-2 region codes format is required.
-// Otherwise region code is accepted both with or without country code.
 func ProcessGeofeed(
 	geofeedFilename,
 	mmdbFilename,
 	ispFilename string,
-	laxMode bool,
+	opts Options,
 ) (CheckResult, []string, map[uint]int, error) { //nolint:unparam // false positive on map[uint]int
 	c := NewCheckResult()
 	var diffLines []string
@@ -53,6 +63,9 @@ func ProcessGeofeed(
 	// See https://github.com/golang/go/issues/33887.
 	geofeedFH, err := utfutil.OpenFile(filepath.Clean(geofeedFilename), utfutil.UTF8)
 	if err != nil {
+		if opts.HideFilePathsInErrorMessages {
+			return c, diffLines, nil, fmt.Errorf("unable to open file: %w", err)
+		}
 		return c, diffLines, nil, fmt.Errorf("unable to open %s: %w", geofeedFilename, err)
 	}
 	defer func() {
@@ -63,6 +76,9 @@ func ProcessGeofeed(
 
 	db, err := geoip2.Open(filepath.Clean(mmdbFilename))
 	if err != nil {
+		if opts.HideFilePathsInErrorMessages {
+			return c, diffLines, nil, fmt.Errorf("unable to open MMDB: %w", err)
+		}
 		return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", mmdbFilename, err)
 	}
 	defer db.Close()
@@ -71,7 +87,10 @@ func ProcessGeofeed(
 	if ispFilename != "" {
 		ispdb, err = geoip2.Open(filepath.Clean(ispFilename))
 		if err != nil {
-			return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", ispFilename, err)
+			if opts.HideFilePathsInErrorMessages {
+				return c, diffLines, nil, fmt.Errorf("unable to open ISP MMDB: %w", err)
+			}
+			return c, diffLines, nil, fmt.Errorf("unable to open ISP MMDB %s: %w", ispFilename, err)
 		}
 		defer ispdb.Close()
 	}
@@ -91,8 +110,10 @@ func ProcessGeofeed(
 			break
 		}
 		if err != nil {
-			return c, diffLines, asnCounts,
-				fmt.Errorf("unable to read next row in %s: %w", geofeedFilename, err)
+			if opts.HideFilePathsInErrorMessages {
+				return c, diffLines, asnCounts, fmt.Errorf("unable to read next row: %w", err)
+			}
+			return c, diffLines, asnCounts, fmt.Errorf("unable to read next row in %s: %w", geofeedFilename, err)
 		}
 
 		c.Total++
@@ -111,7 +132,7 @@ func ProcessGeofeed(
 			continue
 		}
 
-		diffLine, result := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts, laxMode)
+		diffLine, result := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts, opts)
 		if !result.valid {
 			if _, ok := c.SampleInvalidRows[result.invalidityType]; !ok {
 				c.SampleInvalidRows[result.invalidityType] = fmt.Sprintf(
@@ -130,8 +151,10 @@ func ProcessGeofeed(
 		}
 	}
 	if err != nil && !errors.Is(err, io.EOF) {
-		return c, diffLines, asnCounts,
-			fmt.Errorf("error while reading %s: %w", geofeedFilename, err)
+		if opts.HideFilePathsInErrorMessages {
+			return c, diffLines, asnCounts, fmt.Errorf("error reading file: %w", err)
+		}
+		return c, diffLines, asnCounts, fmt.Errorf("error while reading %s: %w", geofeedFilename, err)
 	}
 
 	if c.Invalid > 0 || len(c.SampleInvalidRows) > 0 {
@@ -151,7 +174,7 @@ func verifyCorrection(
 	correction []string,
 	db, ispdb *geoip2.Reader,
 	asnCounts map[uint]int,
-	laxMode bool,
+	opts Options,
 ) (string, verificationResult) {
 	/*
 	   0: network (CIDR or single IP)
@@ -207,7 +230,7 @@ func verifyCorrection(
 	// In "--lax" mode both region code formats (with or without country code) are accepted.
 	if strings.Contains(correction[2], "-") {
 		mostSpecificSubdivision = mmdbRecord.Country.IsoCode + "-" + mostSpecificSubdivision
-	} else if correction[2] != "" && !laxMode {
+	} else if correction[2] != "" && !opts.LaxMode {
 		return "", verificationResult{
 			valid:          false,
 			invalidityType: InvalidRegionCode,

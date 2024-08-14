@@ -81,7 +81,7 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 	for _, test := range goodTests {
 		t.Run(
 			test.gf+" "+test.db, func(t *testing.T) {
-				c, dl, _, err := ProcessGeofeed(test.gf, test.db, "", test.laxMode)
+				c, dl, _, err := ProcessGeofeed(test.gf, test.db, "", Options{LaxMode: test.laxMode})
 				require.NoError(t, err, "processGeofeed ran without error")
 				for i, s := range test.dl {
 					assert.Contains(
@@ -167,7 +167,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 	for _, test := range badTests {
 		t.Run(
 			test.gf+" "+test.db, func(t *testing.T) {
-				c, _, _, err := ProcessGeofeed(test.gf, test.db, "", test.laxMode)
+				c, _, _, err := ProcessGeofeed(test.gf, test.db, "", Options{LaxMode: test.laxMode})
 				require.ErrorIs(
 					t,
 					err,
