@@ -47,6 +47,9 @@ type Options struct {
 	// from appearing in error messages. This reduces information leakage in
 	// contexts where the error messages might be shared.
 	HideFilePathsInErrorMessages bool
+	// EmptyOK, if set to true, will consider a geofeed with no records to be
+	// valid. The default behavior (false) requires a geofeed to not be empty.
+	EmptyOK bool
 }
 
 // ProcessGeofeed attempts to validate a given geofeedFilename.
@@ -155,6 +158,10 @@ func ProcessGeofeed(
 			return c, diffLines, asnCounts, fmt.Errorf("error reading file: %w", err)
 		}
 		return c, diffLines, asnCounts, fmt.Errorf("error while reading %s: %w", geofeedFilename, err)
+	}
+
+	if c.Total == 0 && !opts.EmptyOK {
+		return c, diffLines, asnCounts, ErrEmptyGeofeed
 	}
 
 	if c.Invalid > 0 || len(c.SampleInvalidRows) > 0 {

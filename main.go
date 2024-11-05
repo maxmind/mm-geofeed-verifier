@@ -30,6 +30,7 @@ type config struct {
 	db      string
 	isp     string
 	laxMode bool
+	emptyOK bool
 }
 
 func main() {
@@ -50,7 +51,7 @@ func run() error {
 		conf.gf,
 		conf.db,
 		conf.isp,
-		verify.Options{LaxMode: conf.laxMode},
+		verify.Options{LaxMode: conf.laxMode, EmptyOK: conf.emptyOK},
 	)
 	if err != nil {
 		if errors.Is(err, verify.ErrInvalidGeofeed) {
@@ -108,6 +109,11 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 		"lax",
 		false,
 		"Enable lax mode: geofeed's region code may be provided without country code prefix")
+	flags.BoolVar(
+		&conf.emptyOK,
+		"empty-ok",
+		false,
+		"Allow empty geofeeds to be considered valid")
 
 	err = flags.Parse(args)
 	if err != nil {

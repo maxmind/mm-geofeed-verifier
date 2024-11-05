@@ -14,6 +14,7 @@ type processGeofeedTest struct {
 	c       CheckResult
 	em      error
 	laxMode bool
+	emptyOK bool
 }
 
 func TestProcessGeofeed_Valid(t *testing.T) {
@@ -74,6 +75,15 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			},
 			laxMode: false,
 		},
+		{
+			gf: "test_data/empty.csv",
+			db: "test_data/GeoIP2-City-Test.mmdb",
+			c: CheckResult{
+				Total:             0,
+				SampleInvalidRows: map[RowInvalidity]string{},
+			},
+			emptyOK: true,
+		},
 	}
 
 	// Testing the full content of the difference explanation strings is likely to be
@@ -81,7 +91,15 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 	for _, test := range goodTests {
 		t.Run(
 			test.gf+" "+test.db, func(t *testing.T) {
-				c, dl, _, err := ProcessGeofeed(test.gf, test.db, "", Options{LaxMode: test.laxMode})
+				c, dl, _, err := ProcessGeofeed(
+					test.gf,
+					test.db,
+					"",
+					Options{
+						EmptyOK: test.emptyOK,
+						LaxMode: test.laxMode,
+					},
+				)
 				require.NoError(t, err, "processGeofeed ran without error")
 				for i, s := range test.dl {
 					assert.Contains(
@@ -102,7 +120,6 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 		{
 			gf: "test_data/geofeed-invalid-missing-fields.csv",
 			db: "test_data/GeoIP2-City-Test.mmdb",
-			dl: []string{},
 			c: CheckResult{
 				Total:       2,
 				Differences: 0,
@@ -118,7 +135,6 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 		{
 			gf: "test_data/geofeed-invalid-empty-network.csv",
 			db: "test_data/GeoIP2-City-Test.mmdb",
-			dl: []string{},
 			c: CheckResult{
 				Total:       2,
 				Differences: 1,
@@ -133,7 +149,6 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 		{
 			gf: "test_data/geofeed-invalid-network.csv",
 			db: "test_data/GeoIP2-City-Test.mmdb",
-			dl: []string{},
 			c: CheckResult{
 				Total:       2,
 				Differences: 1,
@@ -149,7 +164,6 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 			// Geofeed that is valid in lax mode should not be valid if laxMode == true.
 			gf: "test_data/geofeed-valid-lax.csv",
 			db: "test_data/GeoIP2-City-Test.mmdb",
-			dl: []string{},
 			c: CheckResult{
 				Total:       3,
 				Differences: 1,
@@ -162,12 +176,30 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 			em:      ErrInvalidGeofeed,
 			laxMode: false,
 		},
+		{
+			gf: "test_data/empty.csv",
+			db: "test_data/GeoIP2-City-Test.mmdb",
+			c: CheckResult{
+				Total:             0,
+				SampleInvalidRows: map[RowInvalidity]string{},
+			},
+			em:      ErrEmptyGeofeed,
+			emptyOK: false,
+		},
 	}
 
 	for _, test := range badTests {
 		t.Run(
 			test.gf+" "+test.db, func(t *testing.T) {
-				c, _, _, err := ProcessGeofeed(test.gf, test.db, "", Options{LaxMode: test.laxMode})
+				c, _, _, err := ProcessGeofeed(
+					test.gf,
+					test.db,
+					"",
+					Options{
+						EmptyOK: test.emptyOK,
+						LaxMode: test.laxMode,
+					},
+				)
 				require.ErrorIs(
 					t,
 					err,
