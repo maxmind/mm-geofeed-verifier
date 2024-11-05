@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+## 3.1.0 (2024-11-05)
+
+* Empty geofeeds will now be considered invalid, unless the (new) EmptyOK option
+  is passed to ProcessGeofeed (e.g. via the new `empty-ok` flag).
+
 ## 3.0.0 (2024-08-14)
 
 * Update interface of ProcessGeofeed in the verifier package, adding a new
