@@ -55,7 +55,11 @@ func run() error {
 	)
 	if err != nil {
 		if errors.Is(err, verify.ErrInvalidGeofeed) {
-			log.Printf("Found %d invalid rows out of %d rows in total, examples by type:", c.Invalid, c.Total)
+			log.Printf(
+				"Found %d invalid rows out of %d rows in total, examples by type:",
+				c.Invalid,
+				c.Total,
+			)
 			for invType, invMessage := range c.SampleInvalidRows {
 				log.Printf("%s: '%s'", invType, invMessage)
 			}
