@@ -116,7 +116,11 @@ func ProcessGeofeed(
 			if opts.HideFilePathsInErrorMessages {
 				return c, diffLines, asnCounts, fmt.Errorf("unable to read next row: %w", err)
 			}
-			return c, diffLines, asnCounts, fmt.Errorf("unable to read next row in %s: %w", geofeedFilename, err)
+			return c, diffLines, asnCounts, fmt.Errorf(
+				"unable to read next row in %s: %w",
+				geofeedFilename,
+				err,
+			)
 		}
 
 		c.Total++
@@ -135,7 +139,13 @@ func ProcessGeofeed(
 			continue
 		}
 
-		diffLine, result := verifyCorrection(row[:expectedFieldsPerRecord], db, ispdb, asnCounts, opts)
+		diffLine, result := verifyCorrection(
+			row[:expectedFieldsPerRecord],
+			db,
+			ispdb,
+			asnCounts,
+			opts,
+		)
 		if !result.valid {
 			if _, ok := c.SampleInvalidRows[result.invalidityType]; !ok {
 				c.SampleInvalidRows[result.invalidityType] = fmt.Sprintf(
@@ -157,7 +167,11 @@ func ProcessGeofeed(
 		if opts.HideFilePathsInErrorMessages {
 			return c, diffLines, asnCounts, fmt.Errorf("error reading file: %w", err)
 		}
-		return c, diffLines, asnCounts, fmt.Errorf("error while reading %s: %w", geofeedFilename, err)
+		return c, diffLines, asnCounts, fmt.Errorf(
+			"error while reading %s: %w",
+			geofeedFilename,
+			err,
+		)
 	}
 
 	if c.Total == 0 && !opts.EmptyOK {
@@ -198,9 +212,12 @@ func verifyCorrection(
 	networkOrIP := correction[0]
 	if networkOrIP == "" {
 		return "", verificationResult{
-			valid:            false,
-			invalidityType:   EmptyNetwork,
-			invalidityReason: fmt.Sprintf("network field is empty, row: '%s'", strings.Join(correction, ",")),
+			valid:          false,
+			invalidityType: EmptyNetwork,
+			invalidityReason: fmt.Sprintf(
+				"network field is empty, row: '%s'",
+				strings.Join(correction, ","),
+			),
 		}
 	}
 	if !(strings.Contains(networkOrIP, "/")) {
@@ -222,9 +239,13 @@ func verifyCorrection(
 	mmdbRecord, err := db.City(network)
 	if err != nil {
 		return "", verificationResult{
-			valid:            false,
-			invalidityType:   UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf("unable to find city record for %s: %s", networkOrIP, err),
+			valid:          false,
+			invalidityType: UnableToFindCityRecord,
+			invalidityReason: fmt.Sprintf(
+				"unable to find city record for %s: %s",
+				networkOrIP,
+				err,
+			),
 		}
 	}
 
@@ -255,9 +276,13 @@ func verifyCorrection(
 		ispRecord, err := ispdb.ISP(network)
 		if err != nil {
 			return "", verificationResult{
-				valid:            false,
-				invalidityType:   UnableToFindISPRecord,
-				invalidityReason: fmt.Sprintf("unable to find ISP record for %s: %s", networkOrIP, err),
+				valid:          false,
+				invalidityType: UnableToFindISPRecord,
+				invalidityReason: fmt.Sprintf(
+					"unable to find ISP record for %s: %s",
+					networkOrIP,
+					err,
+				),
 			}
 		}
 		asNumber = ispRecord.AutonomousSystemNumber
