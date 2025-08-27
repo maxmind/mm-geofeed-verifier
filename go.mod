@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/TomOnTime/utfutil v1.0.0
 	github.com/oschwald/geoip2-golang v1.13.0
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
