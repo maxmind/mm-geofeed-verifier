@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
+	"net/netip"
 	"path/filepath"
 	"strings"
 
 	"github.com/TomOnTime/utfutil"
-	geoip2 "github.com/oschwald/geoip2-golang"
+	"github.com/oschwald/maxminddb-golang/v2"
 )
 
 // CheckResult holds the total number of rows for a geofeed file,
@@ -77,7 +77,7 @@ func ProcessGeofeed(
 		}
 	}()
 
-	db, err := geoip2.Open(filepath.Clean(mmdbFilename))
+	db, err := maxminddb.Open(filepath.Clean(mmdbFilename))
 	if err != nil {
 		if opts.HideFilePathsInErrorMessages {
 			return c, diffLines, nil, fmt.Errorf("unable to open MMDB: %w", err)
@@ -86,9 +86,9 @@ func ProcessGeofeed(
 	}
 	defer db.Close()
 
-	var ispdb *geoip2.Reader
+	var ispdb *maxminddb.Reader
 	if ispFilename != "" {
-		ispdb, err = geoip2.Open(filepath.Clean(ispFilename))
+		ispdb, err = maxminddb.Open(filepath.Clean(ispFilename))
 		if err != nil {
 			if opts.HideFilePathsInErrorMessages {
 				return c, diffLines, nil, fmt.Errorf("unable to open ISP MMDB: %w", err)
@@ -193,7 +193,7 @@ type verificationResult struct {
 
 func verifyCorrection(
 	correction []string,
-	db, ispdb *geoip2.Reader,
+	db, ispdb *maxminddb.Reader,
 	asnCounts map[uint]int,
 	opts Options,
 ) (string, verificationResult) {
@@ -227,7 +227,7 @@ func verifyCorrection(
 			networkOrIP += "/32"
 		}
 	}
-	network, _, err := net.ParseCIDR(networkOrIP) //nolint:forbidigo // use of net is ok for now
+	network, err := netip.ParsePrefix(networkOrIP)
 	if err != nil {
 		return "", verificationResult{
 			valid:            false,
@@ -236,7 +236,11 @@ func verifyCorrection(
 		}
 	}
 
-	mmdbRecord, err := db.City(network)
+	// XXX - should we be checking the whole network?
+	result := db.Lookup(network.Addr())
+
+	var mostSpecificSubdivision string
+	err = result.DecodePath(&mostSpecificSubdivision, "subdivisions", -1, "iso_code")
 	if err != nil {
 		return "", verificationResult{
 			valid:          false,
@@ -249,15 +253,53 @@ func verifyCorrection(
 		}
 	}
 
-	mostSpecificSubdivision := ""
-	if len(mmdbRecord.Subdivisions) > 0 {
-		mostSpecificSubdivision = mmdbRecord.Subdivisions[len(mmdbRecord.Subdivisions)-1].IsoCode
+	var countryCode string
+	err = result.DecodePath(&countryCode, "country", "iso_code")
+	if err != nil {
+		return "", verificationResult{
+			valid:          false,
+			invalidityType: UnableToFindCityRecord,
+			invalidityReason: fmt.Sprintf(
+				"unable to find city record for %s: %s",
+				networkOrIP,
+				err,
+			),
+		}
 	}
+
+	var cityName string
+	err = result.DecodePath(&cityName, "city", "names", "en")
+	if err != nil {
+		return "", verificationResult{
+			valid:          false,
+			invalidityType: UnableToFindCityRecord,
+			invalidityReason: fmt.Sprintf(
+				"unable to find city record for %s: %s",
+				networkOrIP,
+				err,
+			),
+		}
+	}
+
+	var postalCode string
+	err = result.DecodePath(&postalCode, "postal", "code")
+	if err != nil {
+		return "", verificationResult{
+			valid:          false,
+			invalidityType: UnableToFindCityRecord,
+			invalidityReason: fmt.Sprintf(
+				"unable to find city record for %s: %s",
+				networkOrIP,
+				err,
+			),
+		}
+	}
+
 	// ISO-3166-2 region codes are prefixed with the ISO country code,
 	// in strict (default) mode we require this format.
 	// In "--lax" mode both region code formats (with or without country code) are accepted.
 	if strings.Contains(correction[2], "-") {
-		mostSpecificSubdivision = mmdbRecord.Country.IsoCode + "-" + mostSpecificSubdivision
+		mostSpecificSubdivision = countryCode + "-" + mostSpecificSubdivision
 	} else if correction[2] != "" && !opts.LaxMode {
 		return "", verificationResult{
 			valid:          false,
@@ -273,7 +315,13 @@ func verifyCorrection(
 	asName := ""
 	ispName := ""
 	if ispdb != nil {
-		ispRecord, err := ispdb.ISP(network)
+		var ispRecord struct {
+			AutonomousSystemNumber       uint   `maxminddb:"autonomous_system_number"`
+			AutonomousSystemOrganization string `maxminddb:"autonomous_system_organization"`
+			ISP                          string `maxminddb:"isp"`
+		}
+		// XXX - should we be checking the whole network?
+		err := ispdb.Lookup(network.Addr()).Decode(&ispRecord)
 		if err != nil {
 			return "", verificationResult{
 				valid:          false,
@@ -298,13 +346,13 @@ func verifyCorrection(
 	foundDiff := false
 	lines := []string{fmt.Sprintf("\nFound a potential improvement: '%s'", networkOrIP)}
 
-	if !(strings.EqualFold(correction[1], mmdbRecord.Country.IsoCode)) {
+	if !(strings.EqualFold(correction[1], countryCode)) {
 		foundDiff = true
 		lines = append(
 			lines,
 			fmt.Sprintf(
 				"current country: '%s'%ssuggested country: '%s'",
-				mmdbRecord.Country.IsoCode,
+				countryCode,
 				indent,
 				correction[1],
 			),
@@ -324,13 +372,13 @@ func verifyCorrection(
 		)
 	}
 
-	if !(strings.EqualFold(correction[3], mmdbRecord.City.Names["en"])) {
+	if !(strings.EqualFold(correction[3], cityName)) {
 		foundDiff = true
 		lines = append(
 			lines,
 			fmt.Sprintf(
 				"current city: '%s'%ssuggested city: '%s'",
-				mmdbRecord.City.Names["en"],
+				cityName,
 				indent,
 				correction[3],
 			),
@@ -340,13 +388,13 @@ func verifyCorrection(
 	// if no postal code is provided in the correction, do not report on any
 	// differences; postal codes are frequently omitted, and as of 2020-08-01 are
 	// the postal code field is considered deprecated in RFC 8805
-	if correction[4] != "" && !(strings.EqualFold(correction[4], mmdbRecord.Postal.Code)) {
+	if correction[4] != "" && !(strings.EqualFold(correction[4], postalCode)) {
 		foundDiff = true
 		lines = append(
 			lines,
 			fmt.Sprintf(
 				"current postal code: '%s'%ssuggested postal code: '%s'",
-				mmdbRecord.Postal.Code,
+				postalCode,
 				indent,
 				correction[4],
 			),
