@@ -154,7 +154,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				Differences: 1,
 				Invalid:     1,
 				SampleInvalidRows: map[RowInvalidity]string{
-					UnableToParseNetwork: "line 1: unable to parse network 2a02:/29: invalid CIDR address: 2a02:/29",
+					UnableToParseNetwork: `line 1: unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
 				},
 			},
 			em:      ErrInvalidGeofeed,
