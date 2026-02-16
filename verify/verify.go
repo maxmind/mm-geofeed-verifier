@@ -3,16 +3,17 @@
 package verify
 
 import (
+	"bytes"
 	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
-	"github.com/TomOnTime/utfutil"
 	"github.com/oschwald/maxminddb-golang/v2"
 )
 
@@ -62,20 +63,20 @@ func ProcessGeofeed(
 	c := NewCheckResult()
 	var diffLines []string
 
-	// Use utfutil to remove a BOM, if present (common on files from Windows).
-	// See https://github.com/golang/go/issues/33887.
-	geofeedFH, err := utfutil.OpenFile(filepath.Clean(geofeedFilename), utfutil.UTF8)
+	geofeedData, err := os.ReadFile(filepath.Clean(geofeedFilename))
 	if err != nil {
 		if opts.HideFilePathsInErrorMessages {
 			return c, diffLines, nil, fmt.Errorf("unable to open file: %w", err)
 		}
 		return c, diffLines, nil, fmt.Errorf("unable to open %s: %w", geofeedFilename, err)
 	}
-	defer func() {
-		if err := geofeedFH.Close(); err != nil {
-			log.Println(err)
-		}
-	}()
+
+	// Strip UTF-8 BOM if present (common on files from Windows).
+	geofeedData = bytes.TrimPrefix(geofeedData, []byte{0xEF, 0xBB, 0xBF})
+
+	if !utf8.Valid(geofeedData) {
+		return c, diffLines, nil, ErrNotUTF8
+	}
 
 	db, err := maxminddb.Open(filepath.Clean(mmdbFilename))
 	if err != nil {
@@ -99,7 +100,7 @@ func ProcessGeofeed(
 	}
 	asnCounts := map[uint]int{}
 
-	csvReader := csv.NewReader(geofeedFH)
+	csvReader := csv.NewReader(bytes.NewReader(geofeedData))
 	csvReader.ReuseRecord = true
 	csvReader.Comment = '#'
 	csvReader.FieldsPerRecord = -1

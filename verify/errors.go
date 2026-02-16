@@ -3,6 +3,11 @@ package verify
 import "errors"
 
 var (
+	// ErrNotUTF8 indicates a file encoding that is not valid UTF-8 (with
+	// optional BOM). RFC 8805 says that "feeds MUST use UTF-8 character
+	// encoding". This is a separate error from ErrInvalidGeofeed, because we
+	// can't confidently read anything from the file if it's not UTF-8.
+	ErrNotUTF8 = errors.New("geofeed is not valid UTF-8")
 	// ErrInvalidGeofeed represents error that is returned in case of incomplete
 	// compliance with RFC 8805 standards and the mode in which the program is
 	// run.
