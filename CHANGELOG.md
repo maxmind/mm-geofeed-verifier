@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+## 4.0.0 (2026-02-16)
+
+* Require that geofeeds be encoded as valid UTF-8.
+
 ## 3.1.0 (2024-11-05)
 
 * Empty geofeeds will now be considered invalid, unless the (new) EmptyOK option

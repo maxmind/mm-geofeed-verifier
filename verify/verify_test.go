@@ -76,6 +76,20 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			laxMode: false,
 		},
 		{
+			gf: "test_data/geofeed-valid-utf8-bom.csv",
+			db: "test_data/GeoIP2-City-Test.mmdb",
+			dl: []string{
+				"Found a potential improvement: '2a02:ecc0::/29",
+				"current postal code: '34021'\t\tsuggested postal code: '1060'",
+			},
+			c: CheckResult{
+				Total:             3,
+				Differences:       2,
+				SampleInvalidRows: map[RowInvalidity]string{},
+			},
+			laxMode: false,
+		},
+		{
 			gf: "test_data/empty.csv",
 			db: "test_data/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
@@ -209,5 +223,33 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				assert.Equal(t, test.c, c)
 			},
 		)
+	}
+}
+
+func TestProcessGeofeed_NonUTF8(t *testing.T) {
+	tests := []struct {
+		gf   string
+		desc string
+	}{
+		{
+			gf:   "test_data/geofeed-valid-utf16le.csv",
+			desc: "UTF-16 LE encoded geofeed",
+		},
+		{
+			gf:   "test_data/geofeed-valid-shiftjis.csv",
+			desc: "Shift-JIS encoded geofeed",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			_, _, _, err := ProcessGeofeed(
+				test.gf,
+				"test_data/GeoIP2-City-Test.mmdb",
+				"",
+				Options{},
+			)
+			require.ErrorIs(t, err, ErrNotUTF8)
+		})
 	}
 }

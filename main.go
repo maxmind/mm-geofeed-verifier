@@ -18,7 +18,7 @@ import (
 	"sort" //nolint:depguard // preexisting
 	"strings"
 
-	"github.com/maxmind/mm-geofeed-verifier/v3/verify"
+	"github.com/maxmind/mm-geofeed-verifier/v4/verify"
 )
 
 // This value is set by build scripts. Changing the name of
