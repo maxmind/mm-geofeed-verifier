@@ -55,7 +55,7 @@ func run() error {
 	)
 	if err != nil {
 		if errors.Is(err, verify.ErrInvalidGeofeed) {
-			log.Printf(
+			log.Printf( //nolint:gosec // logging verified geofeed data
 				"Found %d invalid rows out of %d rows in total, examples by type:",
 				c.Invalid,
 				c.Total,
