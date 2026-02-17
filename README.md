@@ -31,7 +31,7 @@ website](https://golang.org).
 
 The easiest way is via `go install`:
 
-    $ go install github.com/maxmind/mm-geofeed-verifier/v3@latest
+    $ go install github.com/maxmind/mm-geofeed-verifier/v4@latest
 
 The program will be installed to `$GOPATH/bin/mm-geofeed-verifier`.
 
