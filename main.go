@@ -10,12 +10,13 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"os"
-	"sort" //nolint:depguard // preexisting
+	"slices"
 	"strings"
 
 	"github.com/maxmind/mm-geofeed-verifier/v4/verify"
@@ -55,7 +56,7 @@ func run() error {
 	)
 	if err != nil {
 		if errors.Is(err, verify.ErrInvalidGeofeed) {
-			log.Printf( //nolint:gosec // logging verified geofeed data
+			log.Printf(
 				"Found %d invalid rows out of %d rows in total, examples by type:",
 				c.Invalid,
 				c.Total,
@@ -79,10 +80,10 @@ func run() error {
 	for asNumber := range asnCounts {
 		asNumbers = append(asNumbers, asNumber)
 	}
-	sort.Slice(
+	slices.SortFunc(
 		asNumbers,
-		func(i, j int) bool {
-			return asnCounts[asNumbers[i]] > asnCounts[asNumbers[j]]
+		func(a, b uint) int {
+			return cmp.Compare(asnCounts[b], asnCounts[a])
 		},
 	)
 	for _, asNumber := range asNumbers {
