@@ -28,7 +28,7 @@ the archive. Inside is the `mm-geofeed-verifier` binary.
 
 ## Installation from source or Git
 
-You need the Go compiler (Go 1.24+). You can get it at the
+You need the Go compiler (Go 1.25+). You can get it at the
 [Go website](https://golang.org).
 
 The easiest way is via `go install`:
@@ -44,7 +44,7 @@ https://github.com/maxmind/mm-geofeed-verifier/issues
 
 # Copyright and License
 
-This software is Copyright (c) 2019 - 2025 by MaxMind, Inc.
+This software is Copyright (c) 2019 - 2026 by MaxMind, Inc.
 
 This is free software, licensed under the
 [Apache License, Version 2.0](LICENSE-APACHE) or the [MIT License](LICENSE-MIT),
