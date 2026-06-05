@@ -26,4 +26,4 @@
 NOTE: if a major version release is happening, it's necessary to update the
 `go.mod` file, as well as the import of internal packages according to the new
 major version (see more on
-[releasing modules v2 or higher](https://github.com/golang/go/wiki/Modules#releasing-modules-v2-or-higher))
+[releasing modules v2 or higher](https://go.dev/wiki/Modules#releasing-modules-v2-or-higher))

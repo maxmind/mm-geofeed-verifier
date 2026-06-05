@@ -75,7 +75,7 @@ func run() error {
 		c.Differences,
 	)
 
-	// https://stackoverflow.com/a/56706305
+	// https://stackoverflow.com/questions/18695346/how-can-i-sort-a-mapstringint-by-its-values/56706305#56706305
 	asNumbers := make([]uint, 0, len(asnCounts))
 	for asNumber := range asnCounts {
 		asNumbers = append(asNumbers, asNumber)
