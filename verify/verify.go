@@ -59,7 +59,7 @@ func ProcessGeofeed(
 	mmdbFilename,
 	ispFilename string,
 	opts Options,
-) (CheckResult, []string, map[uint]int, error) { //nolint:unparam // false positive on map[uint]int
+) (CheckResult, []string, map[uint]int, error) {
 	c := NewCheckResult()
 	var diffLines []string
 
@@ -78,25 +78,31 @@ func ProcessGeofeed(
 		return c, diffLines, nil, ErrNotUTF8
 	}
 
-	db, err := maxminddb.Open(filepath.Clean(mmdbFilename))
-	if err != nil {
-		if opts.HideFilePathsInErrorMessages {
-			return c, diffLines, nil, fmt.Errorf("unable to open MMDB: %w", err)
-		}
-		return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", mmdbFilename, err)
-	}
-	defer db.Close()
-
-	var ispdb *maxminddb.Reader
-	if ispFilename != "" {
-		ispdb, err = maxminddb.Open(filepath.Clean(ispFilename))
+	var db, ispdb *maxminddb.Reader
+	if mmdbFilename != "" {
+		db, err = maxminddb.Open(filepath.Clean(mmdbFilename))
 		if err != nil {
 			if opts.HideFilePathsInErrorMessages {
-				return c, diffLines, nil, fmt.Errorf("unable to open ISP MMDB: %w", err)
+				return c, diffLines, nil, fmt.Errorf("unable to open MMDB: %w", err)
 			}
-			return c, diffLines, nil, fmt.Errorf("unable to open ISP MMDB %s: %w", ispFilename, err)
+			return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", mmdbFilename, err)
 		}
-		defer ispdb.Close()
+		defer db.Close()
+
+		if ispFilename != "" {
+			ispdb, err = maxminddb.Open(filepath.Clean(ispFilename))
+			if err != nil {
+				if opts.HideFilePathsInErrorMessages {
+					return c, diffLines, nil, fmt.Errorf("unable to open ISP MMDB: %w", err)
+				}
+				return c, diffLines, nil, fmt.Errorf(
+					"unable to open ISP MMDB %s: %w",
+					ispFilename,
+					err,
+				)
+			}
+			defer ispdb.Close()
+		}
 	}
 	asnCounts := map[uint]int{}
 
@@ -234,6 +240,25 @@ func verifyCorrection(
 			valid:            false,
 			invalidityType:   UnableToParseNetwork,
 			invalidityReason: fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
+		}
+	}
+
+	if db == nil {
+		// format-only mode: only the DB-independent region-code format rule applies.
+		if !strings.Contains(correction[2], "-") && correction[2] != "" && !opts.LaxMode {
+			return "", verificationResult{
+				valid:          false,
+				invalidityType: InvalidRegionCode,
+				invalidityReason: fmt.Sprintf(
+					"invalid ISO 3166-2 region code format in strict (default) mode, row: '%s'",
+					strings.Join(correction, ","),
+				),
+			}
+		}
+		return "", verificationResult{
+			valid:            true,
+			invalidityType:   RowInvalidity(-1),
+			invalidityReason: "",
 		}
 	}
 
