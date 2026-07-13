@@ -198,6 +198,17 @@ type verificationResult struct {
 	invalidityReason string
 }
 
+func invalidRegionCodeResult(correction []string) verificationResult {
+	return verificationResult{
+		valid:          false,
+		invalidityType: InvalidRegionCode,
+		invalidityReason: fmt.Sprintf(
+			"invalid ISO 3166-2 region code format in strict (default) mode, row: '%s'",
+			strings.Join(correction, ","),
+		),
+	}
+}
+
 func verifyCorrection(
 	correction []string,
 	db, ispdb *maxminddb.Reader,
@@ -246,14 +257,7 @@ func verifyCorrection(
 	if db == nil {
 		// format-only mode: only the DB-independent region-code format rule applies.
 		if !strings.Contains(correction[2], "-") && correction[2] != "" && !opts.LaxMode {
-			return "", verificationResult{
-				valid:          false,
-				invalidityType: InvalidRegionCode,
-				invalidityReason: fmt.Sprintf(
-					"invalid ISO 3166-2 region code format in strict (default) mode, row: '%s'",
-					strings.Join(correction, ","),
-				),
-			}
+			return "", invalidRegionCodeResult(correction)
 		}
 		return "", verificationResult{
 			valid:            true,
@@ -327,14 +331,7 @@ func verifyCorrection(
 	if strings.Contains(correction[2], "-") {
 		mostSpecificSubdivision = countryCode + "-" + mostSpecificSubdivision
 	} else if correction[2] != "" && !opts.LaxMode {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: InvalidRegionCode,
-			invalidityReason: fmt.Sprintf(
-				"invalid ISO 3166-2 region code format in strict (default) mode, row: '%s'",
-				strings.Join(correction, ","),
-			),
-		}
+		return "", invalidRegionCodeResult(correction)
 	}
 
 	asNumber := uint(0)
