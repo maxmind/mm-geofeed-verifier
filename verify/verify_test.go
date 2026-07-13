@@ -276,6 +276,21 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 		assert.Equal(t, 0, c.Differences, "expected no differences")
 	})
 
+	t.Run("lax mode accepts non-prefixed region codes, format-only", func(t *testing.T) {
+		c, dl, asnCounts, err := ProcessGeofeed(
+			"test_data/geofeed-valid-lax.csv",
+			"",
+			"",
+			Options{LaxMode: true},
+		)
+		require.NoError(t, err, "processGeofeed ran without error in lax format-only mode")
+		assert.Equal(t, 3, c.Total, "expected total rows")
+		assert.Equal(t, 0, c.Invalid, "expected no invalid rows in lax mode")
+		assert.Equal(t, 0, c.Differences, "expected no differences")
+		assert.Empty(t, dl, "expected no diff lines")
+		assert.Empty(t, asnCounts, "expected no asn counts")
+	})
+
 	t.Run("empty mmdb path opens no DB", func(t *testing.T) {
 		_, _, _, err := ProcessGeofeed(
 			"test_data/geofeed-valid.csv",
