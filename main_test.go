@@ -20,7 +20,7 @@ func TestParseFlagsCorrect(t *testing.T) {
 			[]string{"-gf", "geofeed.csv"},
 			config{
 				gf: "geofeed.csv",
-				db: "/usr/local/share/GeoIP/GeoIP2-City.mmdb",
+				db: "",
 			},
 		},
 		{
@@ -100,19 +100,9 @@ func TestParseFlagsError(t *testing.T) {
 			"-gf is required",
 		},
 		{
-			[]string{"-db", ""},
-			"Path to local geofeed file",
-			"-gf is required and -db can not be an empty string",
-		},
-		{
 			[]string{"-db", "file.mdb"},
 			"Path to local geofeed file",
 			"-gf is required",
-		},
-		{
-			[]string{"-gf", "geofeed.csv", "-db", ""},
-			"Path to local geofeed file",
-			"-db is required",
 		},
 	}
 

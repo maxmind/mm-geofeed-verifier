@@ -1,24 +1,49 @@
 ## mm-geofeed-verifier
 
 mm-geofeed-verifier attempts to validate that a given file follows the format
-suggested at https://datatracker.ietf.org/doc/html/rfc8805, and makes some
-comparisons to a given MMDB, typically the latest available GeoIP2-City.mmdb
+suggested at https://datatracker.ietf.org/doc/html/rfc8805. Optionally, it can
+also compare the corrections against a given MMDB, typically the latest
+available GeoIP2-City.mmdb, reporting on how many differ from the current
+mappings.
 
 ## Usage
+
+#### Format validation only
+
+Run with just `-gf` to validate the geofeed's RFC 8805 format. No database is
+needed:
+
+`mm-geofeed-verifier -gf /path/to/geofeed-formatted-file`
+
+#### Comparing against an MMDB
+
+Pass `-db` to additionally compare each correction against that MMDB and report
+differences:
+
+`mm-geofeed-verifier -gf /path/to/geofeed-formatted-file -db /path/to/Database.mmdb`
 
 #### Default strict mode
 
 By default strict mode requires exact ISO-3166-2 format compliance for region
 codes:
 
-`mm-geofeed-verifier -gf /path/to/geofeed-formatted-file -db /path/to/Database.mmdb`
+`mm-geofeed-verifier -gf /path/to/geofeed-formatted-file`
 
 #### Lax mode
 
 Use `--lax` mode to allow region codes to be provided without ISO-3166 country
 code prefix:
 
-`mm-geofeed-verifier --lax -gf /path/to/geofeed-formatted-file -db /path/to/Database.mmdb`
+`mm-geofeed-verifier --lax -gf /path/to/geofeed-formatted-file`
+
+#### ISP details in comparison output
+
+Pass `-isp <path>` with an ISP MMDB to augment comparison output with AS number,
+AS organization, and ISP name for rows that differ. It is only meaningful
+together with `-db`; in format-only mode it is ignored (the tool prints a notice
+to stderr):
+
+`mm-geofeed-verifier -gf /path/to/geofeed-formatted-file -db /path/to/Database.mmdb -isp /path/to/ISP.mmdb`
 
 ## Installation and release
 
