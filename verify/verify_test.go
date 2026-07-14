@@ -226,6 +226,92 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 	}
 }
 
+func TestProcessGeofeed_FormatOnly(t *testing.T) {
+	t.Run("valid feed, format-only", func(t *testing.T) {
+		c, dl, asnCounts, err := ProcessGeofeed(
+			"test_data/geofeed-valid.csv",
+			"",
+			"",
+			Options{},
+		)
+		require.NoError(t, err, "processGeofeed ran without error")
+		assert.Equal(t, 3, c.Total, "expected total rows")
+		assert.Equal(t, 0, c.Differences, "expected no differences")
+		assert.Equal(t, 0, c.Invalid, "expected no invalid rows")
+		assert.Empty(t, dl, "expected no diff lines")
+		assert.Empty(t, asnCounts, "expected no asn counts")
+	})
+
+	t.Run("malformed feed, format-only", func(t *testing.T) {
+		c, _, _, err := ProcessGeofeed(
+			"test_data/geofeed-invalid-missing-fields.csv",
+			"",
+			"",
+			Options{},
+		)
+		require.ErrorIs(t, err, ErrInvalidGeofeed, "got expected error")
+		assert.Contains(
+			t,
+			c.SampleInvalidRows,
+			FewerFieldsThanExpected,
+			"expected a FewerFieldsThanExpected entry",
+		)
+	})
+
+	t.Run("bad region code in strict mode, format-only", func(t *testing.T) {
+		c, _, _, err := ProcessGeofeed(
+			"test_data/geofeed-valid-lax.csv",
+			"",
+			"",
+			Options{LaxMode: false},
+		)
+		require.ErrorIs(t, err, ErrInvalidGeofeed, "got expected error")
+		assert.Contains(
+			t,
+			c.SampleInvalidRows,
+			InvalidRegionCode,
+			"expected an InvalidRegionCode entry",
+		)
+		assert.Equal(t, 2, c.Invalid, "expected two invalid rows")
+		assert.Equal(t, 0, c.Differences, "expected no differences")
+	})
+
+	t.Run("lax mode accepts non-prefixed region codes, format-only", func(t *testing.T) {
+		c, dl, asnCounts, err := ProcessGeofeed(
+			"test_data/geofeed-valid-lax.csv",
+			"",
+			"",
+			Options{LaxMode: true},
+		)
+		require.NoError(t, err, "processGeofeed ran without error in lax format-only mode")
+		assert.Equal(t, 3, c.Total, "expected total rows")
+		assert.Equal(t, 0, c.Invalid, "expected no invalid rows in lax mode")
+		assert.Equal(t, 0, c.Differences, "expected no differences")
+		assert.Empty(t, dl, "expected no diff lines")
+		assert.Empty(t, asnCounts, "expected no asn counts")
+	})
+
+	t.Run("empty mmdb path opens no DB", func(t *testing.T) {
+		_, _, _, err := ProcessGeofeed(
+			"test_data/geofeed-valid.csv",
+			"",
+			"",
+			Options{},
+		)
+		require.NoError(t, err, "processGeofeed ran without error when mmdbFilename is empty")
+	})
+
+	t.Run("missing mmdb path still errors", func(t *testing.T) {
+		_, _, _, err := ProcessGeofeed(
+			"test_data/geofeed-valid.csv",
+			"test_data/does-not-exist.mmdb",
+			"",
+			Options{},
+		)
+		require.Error(t, err, "processGeofeed errors when a non-empty mmdbFilename does not exist")
+	})
+}
+
 func TestProcessGeofeed_NonUTF8(t *testing.T) {
 	tests := []struct {
 		gf   string

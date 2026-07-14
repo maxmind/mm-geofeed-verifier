@@ -48,6 +48,10 @@ func run() error {
 		return err
 	}
 
+	if conf.db == "" && conf.isp != "" {
+		fmt.Fprintln(os.Stderr, "-isp is ignored without -db")
+	}
+
 	c, diffLines, asnCounts, err := verify.ProcessGeofeed(
 		conf.gf,
 		conf.db,
@@ -66,6 +70,14 @@ func run() error {
 			}
 		}
 		return fmt.Errorf("unable to process geofeed %s: %w", conf.gf, err)
+	}
+
+	if conf.db == "" {
+		fmt.Printf(
+			"Validated %d rows. No MMDB provided (-db), so comparison was skipped.\n",
+			c.Total,
+		)
+		return nil
 	}
 
 	fmt.Printf(
@@ -104,8 +116,8 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 	flags.StringVar(
 		&conf.db,
 		"db",
-		"/usr/local/share/GeoIP/GeoIP2-City.mmdb",
-		"Path to MMDB file to compare geofeed file against",
+		"",
+		"Path to MMDB file to compare the geofeed against (optional; if omitted, only the geofeed format is validated)",
 	)
 	displayVersion := false
 	flags.BoolVar(&displayVersion, "V", false, "Display version")
@@ -131,19 +143,9 @@ func parseFlags(program string, args []string) (c *config, output string, err er
 		os.Exit(0)
 	}
 
-	if conf.gf == "" && conf.db == "" {
-		flags.PrintDefaults()
-		return nil, buf.String(), errors.New(
-			"-gf is required and -db can not be an empty string",
-		)
-	}
 	if conf.gf == "" {
 		flags.PrintDefaults()
 		return nil, buf.String(), errors.New("-gf is required")
-	}
-	if conf.db == "" {
-		flags.PrintDefaults()
-		return nil, buf.String(), errors.New("-db is required")
 	}
 
 	return &conf, buf.String(), nil
