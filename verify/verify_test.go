@@ -364,10 +364,17 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 	detail, ok := counts.SampleInvalidRowDetails[FewerFieldsThanExpected]
 	require.True(t, ok, "expected a sample detail for FewerFieldsThanExpected")
 
-	// The short row is on file line 5. c.Total would report 2, because it
-	// counts data rows and skips the two comment lines above.
+	// The short row is on file line 5. c.Total reports 2 at this point in
+	// processing (it counts data rows: lines 3 and 5, skipping the three
+	// comment lines above: lines 1, 2, and 4), as shown by the legacy
+	// message text below, which embeds c.Total rather than the file line.
 	assert.Equal(t, 5, detail.Line)
 	assert.Equal(t, "2.0.0.0/24,NL,NL-NH,Amsterdam", detail.Row)
+	assert.Equal(
+		t,
+		"line 2: expected 5 fields but got 4, row: '2.0.0.0/24,NL,NL-NH,Amsterdam'",
+		counts.SampleInvalidRows[FewerFieldsThanExpected],
+	)
 
 	// The two maps must never disagree about which row is the sample.
 	assert.Contains(t, counts.SampleInvalidRows[FewerFieldsThanExpected], detail.Row)
