@@ -215,9 +215,12 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						"in strict (default) mode, row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
 				},
 				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+					// Row keeps the trailing whitespace inside the country and
+					// city fields: it is a snapshot from before verifyCorrection
+					// trims its (aliased) copy, unlike the message text above.
 					InvalidRegionCode: {
 						Line: 1,
-						Row:  "2a02:ecc0::/29,US,NJ,Parsippany,",
+						Row:  "2a02:ecc0::/29 ,US,NJ ,Parsippany ,",
 						Reason: "invalid ISO 3166-2 region code format in strict (default) mode, " +
 							"row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
 					},

@@ -54,7 +54,10 @@ type InvalidRow struct {
 	// Line is the 1-based line number of the row in the geofeed file,
 	// counting comment and blank lines.
 	Line int
-	// Row is the row as read, with fields rejoined by commas.
+	// Row is the row as read, with fields rejoined by commas, before any
+	// trimming performed during verification. Only the fields verification
+	// examines are included: all of them for a too-short row, otherwise the
+	// first five.
 	Row string
 	// Reason is the human-readable reason the row is invalid.
 	Reason string

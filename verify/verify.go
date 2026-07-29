@@ -168,8 +168,14 @@ func ProcessGeofeed(
 			continue
 		}
 
+		// verifyCorrection trims its correction argument in place, and that
+		// argument aliases row's backing array, so the row text must be
+		// captured before the call rather than rejoined from row afterward.
+		correction := row[:expectedFieldsPerRecord]
+		joined := strings.Join(correction, ",")
+
 		diffLine, result := verifyCorrection(
-			row[:expectedFieldsPerRecord],
+			correction,
 			db,
 			ispdb,
 			asnCounts,
@@ -188,7 +194,7 @@ func ProcessGeofeed(
 				}
 				c.SampleInvalidRowDetails[result.invalidityType] = InvalidRow{
 					Line:   line,
-					Row:    strings.Join(row, ","),
+					Row:    joined,
 					Reason: result.invalidityReason,
 				}
 			}
