@@ -359,7 +359,7 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 		"",
 		Options{LaxMode: true, HideFilePathsInErrorMessages: true},
 	)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidGeofeed)
 
 	detail, ok := counts.SampleInvalidRowDetails[FewerFieldsThanExpected]
 	require.True(t, ok, "expected a sample detail for FewerFieldsThanExpected")
