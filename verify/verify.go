@@ -138,30 +138,22 @@ func ProcessGeofeed(
 
 		if len(row) < expectedFieldsPerRecord {
 			if _, ok := c.SampleInvalidRows[FewerFieldsThanExpected]; !ok {
+				joined := strings.Join(row, ",")
 				c.SampleInvalidRows[FewerFieldsThanExpected] = fmt.Sprintf(
 					"line %d: expected %d fields but got %d, row: '%s'",
 					c.Total,
 					expectedFieldsPerRecord,
 					len(row),
-					strings.Join(row, ","),
+					joined,
 				)
-				reason := fmt.Sprintf(
-					"expected %d fields but got %d",
-					expectedFieldsPerRecord,
-					len(row),
-				)
-				joined := strings.Join(row, ",")
-				line := 0
-				// FieldPos panics if the field index is out of range. A record
-				// returned by csv.Reader always has at least one field, but guard
-				// anyway rather than risk a panic on a malformed feed.
-				if len(row) > 0 {
-					line, _ = csvReader.FieldPos(0)
-				}
 				c.SampleInvalidRowDetails[FewerFieldsThanExpected] = InvalidRow{
-					Line:   line,
-					Row:    joined,
-					Reason: reason,
+					Line: sampleLine(csvReader, row),
+					Row:  joined,
+					Reason: fmt.Sprintf(
+						"expected %d fields but got %d",
+						expectedFieldsPerRecord,
+						len(row),
+					),
 				}
 			}
 			c.Invalid++
@@ -188,12 +180,8 @@ func ProcessGeofeed(
 					c.Total,
 					result.invalidityReason,
 				)
-				line := 0
-				if len(row) > 0 {
-					line, _ = csvReader.FieldPos(0)
-				}
 				c.SampleInvalidRowDetails[result.invalidityType] = InvalidRow{
-					Line:   line,
+					Line:   sampleLine(csvReader, row),
 					Row:    joined,
 					Reason: result.invalidityReason,
 				}
@@ -227,6 +215,18 @@ func ProcessGeofeed(
 	}
 
 	return c, diffLines, asnCounts, nil
+}
+
+// sampleLine returns the geofeed file line of row via csvReader's FieldPos.
+// FieldPos panics if the field index is out of range; csv.Reader never
+// actually returns a zero-field record with a nil error, but the guard is
+// cheap insurance against a panic if that ever changes.
+func sampleLine(csvReader *csv.Reader, row []string) int {
+	if len(row) == 0 {
+		return 0
+	}
+	line, _ := csvReader.FieldPos(0)
+	return line
 }
 
 type verificationResult struct {
