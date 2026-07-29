@@ -373,6 +373,34 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 	assert.Contains(t, counts.SampleInvalidRows[FewerFieldsThanExpected], detail.Row)
 }
 
+// TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection covers the
+// second SampleInvalidRowDetails population site: rows that reach
+// verifyCorrection (as opposed to the too-few-fields site covered by
+// TestSampleInvalidRowDetailsReportsFileLine above). Reverting this site's
+// Line back to the comment-skipping row counter must fail this test.
+func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T) {
+	counts, _, _, err := ProcessGeofeed(
+		"test_data/comments-then-empty-network.csv",
+		"test_data/GeoIP2-City-Test.mmdb",
+		"",
+		Options{},
+	)
+	require.ErrorIs(t, err, ErrInvalidGeofeed)
+
+	detail, ok := counts.SampleInvalidRowDetails[EmptyNetwork]
+	require.True(t, ok, "expected a sample detail for EmptyNetwork")
+
+	// The empty-network row is on file line 5. c.Total would report 2,
+	// because it counts data rows (lines 3 and 5) and skips the three
+	// comment lines above (lines 1, 2, and 4).
+	assert.Equal(t, 5, detail.Line)
+	assert.Equal(t, ",,,,", detail.Row)
+	assert.Equal(t, 2, counts.Total)
+
+	// The two maps must never disagree about which row is the sample.
+	assert.Contains(t, counts.SampleInvalidRows[EmptyNetwork], detail.Row)
+}
+
 func TestProcessGeofeed_NonUTF8(t *testing.T) {
 	tests := []struct {
 		gf   string
