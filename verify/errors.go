@@ -48,3 +48,14 @@ func (ri RowInvalidity) String() string {
 		return "UnknownInvalidityType"
 	}
 }
+
+// InvalidRow describes a sample row that failed verification.
+type InvalidRow struct {
+	// Line is the 1-based line number of the row in the geofeed file,
+	// counting comment and blank lines.
+	Line int
+	// Row is the row as read, with fields rejoined by commas.
+	Row string
+	// Reason is the human-readable reason the row is invalid.
+	Reason string
+}

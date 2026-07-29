@@ -26,15 +26,19 @@ type CheckResult struct {
 	Differences       int
 	Invalid           int
 	SampleInvalidRows map[RowInvalidity]string
+	// SampleInvalidRowDetails holds the same sample rows as
+	// SampleInvalidRows in structured form.
+	SampleInvalidRowDetails map[RowInvalidity]InvalidRow
 }
 
 // NewCheckResult returns new CheckResult instance.
 func NewCheckResult() CheckResult {
 	return CheckResult{
-		Total:             0,
-		Differences:       0,
-		Invalid:           0,
-		SampleInvalidRows: map[RowInvalidity]string{},
+		Total:                   0,
+		Differences:             0,
+		Invalid:                 0,
+		SampleInvalidRows:       map[RowInvalidity]string{},
+		SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
 	}
 }
 
@@ -141,6 +145,24 @@ func ProcessGeofeed(
 					len(row),
 					strings.Join(row, ","),
 				)
+				reason := fmt.Sprintf(
+					"expected %d fields but got %d",
+					expectedFieldsPerRecord,
+					len(row),
+				)
+				joined := strings.Join(row, ",")
+				line := 0
+				// FieldPos panics if the field index is out of range. A record
+				// returned by csv.Reader always has at least one field, but guard
+				// anyway rather than risk a panic on a malformed feed.
+				if len(row) > 0 {
+					line, _ = csvReader.FieldPos(0)
+				}
+				c.SampleInvalidRowDetails[FewerFieldsThanExpected] = InvalidRow{
+					Line:   line,
+					Row:    joined,
+					Reason: reason,
+				}
 			}
 			c.Invalid++
 			continue
@@ -160,6 +182,15 @@ func ProcessGeofeed(
 					c.Total,
 					result.invalidityReason,
 				)
+				line := 0
+				if len(row) > 0 {
+					line, _ = csvReader.FieldPos(0)
+				}
+				c.SampleInvalidRowDetails[result.invalidityType] = InvalidRow{
+					Line:   line,
+					Row:    strings.Join(row, ","),
+					Reason: result.invalidityReason,
+				}
 			}
 			c.Invalid++
 			continue

@@ -27,9 +27,10 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:             3,
-				Differences:       2,
-				SampleInvalidRows: map[RowInvalidity]string{},
+				Total:                   3,
+				Differences:             2,
+				SampleInvalidRows:       map[RowInvalidity]string{},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: false,
 		},
@@ -41,9 +42,10 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:             3,
-				Differences:       2,
-				SampleInvalidRows: map[RowInvalidity]string{},
+				Total:                   3,
+				Differences:             2,
+				SampleInvalidRows:       map[RowInvalidity]string{},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: true,
 		},
@@ -55,9 +57,10 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:             3,
-				Differences:       2,
-				SampleInvalidRows: map[RowInvalidity]string{},
+				Total:                   3,
+				Differences:             2,
+				SampleInvalidRows:       map[RowInvalidity]string{},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: true,
 		},
@@ -69,9 +72,10 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:             3,
-				Differences:       2,
-				SampleInvalidRows: map[RowInvalidity]string{},
+				Total:                   3,
+				Differences:             2,
+				SampleInvalidRows:       map[RowInvalidity]string{},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: false,
 		},
@@ -83,9 +87,10 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:             3,
-				Differences:       2,
-				SampleInvalidRows: map[RowInvalidity]string{},
+				Total:                   3,
+				Differences:             2,
+				SampleInvalidRows:       map[RowInvalidity]string{},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: false,
 		},
@@ -93,8 +98,9 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			gf: "test_data/empty.csv",
 			db: "test_data/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
-				Total:             0,
-				SampleInvalidRows: map[RowInvalidity]string{},
+				Total:                   0,
+				SampleInvalidRows:       map[RowInvalidity]string{},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
 			},
 			emptyOK: true,
 		},
@@ -142,6 +148,13 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					FewerFieldsThanExpected: "line 1: expected 5 fields but got 4, " +
 						"row: '2a02:ecc0::/29,US,US-NJ,Parsippany'",
 				},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+					FewerFieldsThanExpected: {
+						Line:   1,
+						Row:    "2a02:ecc0::/29,US,US-NJ,Parsippany",
+						Reason: "expected 5 fields but got 4",
+					},
+				},
 			},
 			em:      ErrInvalidGeofeed,
 			laxMode: false,
@@ -156,6 +169,13 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				SampleInvalidRows: map[RowInvalidity]string{
 					EmptyNetwork: "line 2: network field is empty, row: ',,,,'",
 				},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+					EmptyNetwork: {
+						Line:   2,
+						Row:    ",,,,",
+						Reason: "network field is empty, row: ',,,,'",
+					},
+				},
 			},
 			em:      ErrInvalidGeofeed,
 			laxMode: false,
@@ -169,6 +189,14 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				Invalid:     1,
 				SampleInvalidRows: map[RowInvalidity]string{
 					UnableToParseNetwork: `line 1: unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
+				},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+					UnableToParseNetwork: {
+						Line: 1,
+						Row:  "2a02:/29,,,,",
+						Reason: `unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ` +
+							`ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
+					},
 				},
 			},
 			em:      ErrInvalidGeofeed,
@@ -186,6 +214,14 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					InvalidRegionCode: "line 1: invalid ISO 3166-2 region code format " +
 						"in strict (default) mode, row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
 				},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+					InvalidRegionCode: {
+						Line: 1,
+						Row:  "2a02:ecc0::/29,US,NJ,Parsippany,",
+						Reason: "invalid ISO 3166-2 region code format in strict (default) mode, " +
+							"row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
+					},
+				},
 			},
 			em:      ErrInvalidGeofeed,
 			laxMode: false,
@@ -194,8 +230,9 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 			gf: "test_data/empty.csv",
 			db: "test_data/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
-				Total:             0,
-				SampleInvalidRows: map[RowInvalidity]string{},
+				Total:                   0,
+				SampleInvalidRows:       map[RowInvalidity]string{},
+				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
 			},
 			em:      ErrEmptyGeofeed,
 			emptyOK: false,
@@ -310,6 +347,27 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 		)
 		require.Error(t, err, "processGeofeed errors when a non-empty mmdbFilename does not exist")
 	})
+}
+
+func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
+	counts, _, _, err := ProcessGeofeed(
+		"test_data/comments-then-short-row.csv",
+		"test_data/GeoIP2-City-Test.mmdb",
+		"",
+		Options{LaxMode: true, HideFilePathsInErrorMessages: true},
+	)
+	require.Error(t, err)
+
+	detail, ok := counts.SampleInvalidRowDetails[FewerFieldsThanExpected]
+	require.True(t, ok, "expected a sample detail for FewerFieldsThanExpected")
+
+	// The short row is on file line 5. c.Total would report 2, because it
+	// counts data rows and skips the two comment lines above.
+	assert.Equal(t, 5, detail.Line)
+	assert.Equal(t, "2.0.0.0/24,NL,NL-NH,Amsterdam", detail.Row)
+
+	// The two maps must never disagree about which row is the sample.
+	assert.Contains(t, counts.SampleInvalidRows[FewerFieldsThanExpected], detail.Row)
 }
 
 func TestProcessGeofeed_NonUTF8(t *testing.T) {
