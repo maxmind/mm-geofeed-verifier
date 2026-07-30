@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -138,18 +139,19 @@ func ProcessGeofeed(
 
 		if len(row) < expectedFieldsPerRecord {
 			if _, ok := c.SampleInvalidRows[FewerFieldsThanExpected]; !ok {
-				joined := strings.Join(row, ",")
 				c.SampleInvalidRows[FewerFieldsThanExpected] = fmt.Sprintf(
 					"line %d: expected %d fields but got %d, row: '%s'",
 					c.Total,
 					expectedFieldsPerRecord,
 					len(row),
-					joined,
+					strings.Join(row, ","),
 				)
 				c.SampleInvalidRowDetails[FewerFieldsThanExpected] = InvalidRow{
 					Line: sampleLine(csvReader, row),
 					Type: FewerFieldsThanExpected,
-					Row:  joined,
+					// ReuseRecord means row's backing array is overwritten by
+					// the next Read; clone it so this sample survives.
+					Fields: slices.Clone(row),
 					Reason: fmt.Sprintf(
 						"expected %d fields but got %d",
 						expectedFieldsPerRecord,
@@ -162,10 +164,10 @@ func ProcessGeofeed(
 		}
 
 		// verifyCorrection trims its correction argument in place, and that
-		// argument aliases row's backing array, so the row text must be
-		// captured before the call rather than rejoined from row afterward.
+		// argument aliases row's backing array, so the fields must be cloned
+		// before the call rather than copied from row afterward.
 		correction := row[:expectedFieldsPerRecord]
-		joined := strings.Join(correction, ",")
+		fields := slices.Clone(correction)
 
 		diffLine, result := verifyCorrection(
 			correction,
@@ -184,7 +186,7 @@ func ProcessGeofeed(
 				c.SampleInvalidRowDetails[result.invalidityType] = InvalidRow{
 					Line:   sampleLine(csvReader, row),
 					Type:   result.invalidityType,
-					Row:    joined,
+					Fields: fields,
 					Reason: result.invalidityReason,
 				}
 			}

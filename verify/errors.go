@@ -67,11 +67,13 @@ type InvalidRow struct {
 	// example, passed on its own to a renderer) can still be identified.
 	// The zero value is UnknownInvalidity, not FewerFieldsThanExpected.
 	Type RowInvalidity
-	// Row is the row as read, with fields rejoined by commas, before any
+	// Fields holds the row's fields as parsed from the file, before any
 	// trimming performed during verification. Only the fields verification
 	// examines are included: all of them for a too-short row, otherwise the
-	// first five.
-	Row string
+	// first five. Fields is not a CSV encoding: joining it with commas is
+	// not guaranteed to reproduce the original row, since a field itself
+	// containing a comma or a quote will re-split differently.
+	Fields []string
 	// Reason is the human-readable reason the row is invalid.
 	Reason string
 }

@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -152,7 +153,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					FewerFieldsThanExpected: {
 						Line:   1,
 						Type:   FewerFieldsThanExpected,
-						Row:    "2a02:ecc0::/29,US,US-NJ,Parsippany",
+						Fields: []string{"2a02:ecc0::/29", "US", "US-NJ", "Parsippany"},
 						Reason: "expected 5 fields but got 4",
 					},
 				},
@@ -174,7 +175,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					EmptyNetwork: {
 						Line:   2,
 						Type:   EmptyNetwork,
-						Row:    ",,,,",
+						Fields: []string{"", "", "", "", ""},
 						Reason: "network field is empty, row: ',,,,'",
 					},
 				},
@@ -194,9 +195,9 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				},
 				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
 					UnableToParseNetwork: {
-						Line: 1,
-						Type: UnableToParseNetwork,
-						Row:  "2a02:/29,,,,",
+						Line:   1,
+						Type:   UnableToParseNetwork,
+						Fields: []string{"2a02:/29", "", "", "", ""},
 						Reason: `unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ` +
 							`ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
 					},
@@ -218,13 +219,14 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						"in strict (default) mode, row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
 				},
 				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
-					// Row keeps the trailing whitespace inside the country and
-					// city fields: it is a snapshot from before verifyCorrection
-					// trims its (aliased) copy, unlike the message text above.
+					// Fields keeps the trailing whitespace inside the country
+					// and city fields: it is a snapshot from before
+					// verifyCorrection trims its (aliased) copy, unlike the
+					// message text above.
 					InvalidRegionCode: {
-						Line: 1,
-						Type: InvalidRegionCode,
-						Row:  "2a02:ecc0::/29 ,US,NJ ,Parsippany ,",
+						Line:   1,
+						Type:   InvalidRegionCode,
+						Fields: []string{"2a02:ecc0::/29 ", "US", "NJ ", "Parsippany ", ""},
 						Reason: "invalid ISO 3166-2 region code format in strict (default) mode, " +
 							"row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
 					},
@@ -383,7 +385,7 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 	// message text below, which embeds c.Total rather than the file line.
 	assert.Equal(t, 5, detail.Line)
 	assert.Equal(t, FewerFieldsThanExpected, detail.Type)
-	assert.Equal(t, "2.0.0.0/24,NL,NL-NH,Amsterdam", detail.Row)
+	assert.Equal(t, []string{"2.0.0.0/24", "NL", "NL-NH", "Amsterdam"}, detail.Fields)
 	assert.Equal(
 		t,
 		"line 2: expected 5 fields but got 4, row: '2.0.0.0/24,NL,NL-NH,Amsterdam'",
@@ -391,7 +393,11 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 	)
 
 	// The two maps must never disagree about which row is the sample.
-	assert.Contains(t, counts.SampleInvalidRows[FewerFieldsThanExpected], detail.Row)
+	assert.Contains(
+		t,
+		counts.SampleInvalidRows[FewerFieldsThanExpected],
+		strings.Join(detail.Fields, ","),
+	)
 }
 
 // TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection covers the
@@ -416,11 +422,51 @@ func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T)
 	// comment lines above (lines 1, 2, and 4).
 	assert.Equal(t, 5, detail.Line)
 	assert.Equal(t, EmptyNetwork, detail.Type)
-	assert.Equal(t, ",,,,", detail.Row)
+	assert.Equal(t, []string{"", "", "", "", ""}, detail.Fields)
 	assert.Equal(t, 2, counts.Total)
 
 	// The two maps must never disagree about which row is the sample.
-	assert.Contains(t, counts.SampleInvalidRows[EmptyNetwork], detail.Row)
+	assert.Contains(t, counts.SampleInvalidRows[EmptyNetwork], strings.Join(detail.Fields, ","))
+}
+
+// TestSampleInvalidRowDetailsFieldsSurviveReuseRecord guards against Fields
+// aliasing csv.Reader's reused backing array, at both population sites. Each
+// fixture has three same-type invalid rows with distinct field values; only
+// the first of each is captured (first-write-wins), but two more Read calls
+// happen afterward, each overwriting the same backing array since
+// ReuseRecord is set. If Fields held a view into that array instead of a
+// clone, the captured sample would now read back as the third row's
+// content.
+func TestSampleInvalidRowDetailsFieldsSurviveReuseRecord(t *testing.T) {
+	t.Run("verifyCorrection site", func(t *testing.T) {
+		counts, _, _, err := ProcessGeofeed(
+			"test_data/reuse-record-empty-network-repeated.csv",
+			"test_data/GeoIP2-City-Test.mmdb",
+			"",
+			Options{},
+		)
+		require.ErrorIs(t, err, ErrInvalidGeofeed)
+
+		detail, ok := counts.SampleInvalidRowDetails[EmptyNetwork]
+		require.True(t, ok, "expected a sample detail for EmptyNetwork")
+
+		assert.Equal(t, []string{"", "AAAA", "BBBB", "CCCC", "DDDD"}, detail.Fields)
+	})
+
+	t.Run("too-few-fields site", func(t *testing.T) {
+		counts, _, _, err := ProcessGeofeed(
+			"test_data/reuse-record-short-row-repeated.csv",
+			"test_data/GeoIP2-City-Test.mmdb",
+			"",
+			Options{},
+		)
+		require.ErrorIs(t, err, ErrInvalidGeofeed)
+
+		detail, ok := counts.SampleInvalidRowDetails[FewerFieldsThanExpected]
+		require.True(t, ok, "expected a sample detail for FewerFieldsThanExpected")
+
+		assert.Equal(t, []string{"AAAA", "BBBB", "CCCC"}, detail.Fields)
+	})
 }
 
 func TestProcessGeofeed_NonUTF8(t *testing.T) {
