@@ -1,5 +1,17 @@
 ## CHANGELOG
 
+## 5.0.0 - TBD
+
+- Breaking: `CheckResult.SampleInvalidRows` is now
+  `map[RowInvalidity]InvalidRow` rather than `map[RowInvalidity]string`. The
+  preformatted sample strings are gone; the same information is available as
+  data on `InvalidRow`: `Line`, `Type`, `Fields` (the row's own fields, not a
+  rejoined string), a curated and display-safe `Reason`, and internal
+  engineer-facing `Diagnostic` text. `InvalidRow.String()` renders
+  `line <Line>: <Diagnostic>`, which resembles the old string but reports the
+  row's line in the file, counting comment lines, where the old string counted
+  only data rows.
+
 ## 4.0.0 (2026-02-16)
 
 - Require that geofeeds be encoded as valid UTF-8.

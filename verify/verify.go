@@ -23,23 +23,21 @@ import (
 // as information about the rows that failed validation.
 // To create new CheckResult instance use NewCheckResult() func.
 type CheckResult struct {
-	Total             int
-	Differences       int
-	Invalid           int
-	SampleInvalidRows map[RowInvalidity]string
-	// SampleInvalidRowDetails holds the same sample rows as
-	// SampleInvalidRows in structured form.
-	SampleInvalidRowDetails map[RowInvalidity]InvalidRow
+	Total       int
+	Differences int
+	Invalid     int
+	// SampleInvalidRows holds one sample InvalidRow per RowInvalidity kind
+	// encountered, keyed by kind.
+	SampleInvalidRows map[RowInvalidity]InvalidRow
 }
 
 // NewCheckResult returns new CheckResult instance.
 func NewCheckResult() CheckResult {
 	return CheckResult{
-		Total:                   0,
-		Differences:             0,
-		Invalid:                 0,
-		SampleInvalidRows:       map[RowInvalidity]string{},
-		SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
+		Total:             0,
+		Differences:       0,
+		Invalid:           0,
+		SampleInvalidRows: map[RowInvalidity]InvalidRow{},
 	}
 }
 
@@ -139,18 +137,12 @@ func ProcessGeofeed(
 
 		if len(row) < expectedFieldsPerRecord {
 			if _, ok := c.SampleInvalidRows[FewerFieldsThanExpected]; !ok {
-				res := fewerFieldsResult(row, expectedFieldsPerRecord)
-				c.SampleInvalidRows[FewerFieldsThanExpected] = fmt.Sprintf(
-					"line %d: %s",
-					c.Total,
-					res.diagnostic,
-				)
-				c.SampleInvalidRowDetails[FewerFieldsThanExpected] = newInvalidRow(
+				c.SampleInvalidRows[FewerFieldsThanExpected] = newInvalidRow(
 					sampleLine(csvReader, row),
 					// ReuseRecord means row's backing array is overwritten by
 					// the next Read; clone it so this sample survives.
 					slices.Clone(row),
-					res,
+					fewerFieldsResult(row, expectedFieldsPerRecord),
 				)
 			}
 			c.Invalid++
@@ -172,12 +164,7 @@ func ProcessGeofeed(
 		)
 		if !result.valid {
 			if _, ok := c.SampleInvalidRows[result.invalidityType]; !ok {
-				c.SampleInvalidRows[result.invalidityType] = fmt.Sprintf(
-					"line %d: %s",
-					c.Total,
-					result.diagnostic,
-				)
-				c.SampleInvalidRowDetails[result.invalidityType] = newInvalidRow(
+				c.SampleInvalidRows[result.invalidityType] = newInvalidRow(
 					sampleLine(csvReader, row),
 					fields,
 					result,
@@ -237,7 +224,7 @@ type verificationResult struct {
 	valid          bool
 	invalidityType RowInvalidity
 	// diagnostic is internal, engineer-facing text: it feeds
-	// SampleInvalidRows (via a "line %d: " prefix) and InvalidRow.Diagnostic,
+	// InvalidRow.Diagnostic (rendered as "line %d: %s" by InvalidRow.String)
 	// and may embed raw error text or the row itself.
 	diagnostic string
 	// reason is customer-facing wording for the same failure: it feeds

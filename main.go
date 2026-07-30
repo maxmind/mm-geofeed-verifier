@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -65,8 +66,8 @@ func run() error {
 				c.Invalid,
 				c.Total,
 			)
-			for invType, invMessage := range c.SampleInvalidRows {
-				log.Printf("%s: '%s'", invType, invMessage)
+			for _, line := range formatInvalidRows(c.SampleInvalidRows) {
+				log.Print(line)
 			}
 		}
 		return fmt.Errorf("unable to process geofeed %s: %w", conf.gf, err)
@@ -103,6 +104,19 @@ func run() error {
 	}
 
 	return nil
+}
+
+// formatInvalidRows renders one line per sample invalid row, sorted by
+// invalidity type so CLI output order is deterministic. row's own
+// String() already ends with the offending row's diagnostic text (and,
+// for the too-few-fields case, a trailing "row: '...'"), so this does not
+// quote it again -- doing so would double the quotes in that case.
+func formatInvalidRows(rows map[verify.RowInvalidity]verify.InvalidRow) []string {
+	lines := make([]string, 0, len(rows))
+	for _, t := range slices.Sorted(maps.Keys(rows)) {
+		lines = append(lines, fmt.Sprintf("%s: %s", t, rows[t]))
+	}
+	return lines
 }
 
 func parseFlags(program string, args []string) (c *config, output string, err error) {

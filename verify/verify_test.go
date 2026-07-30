@@ -1,7 +1,6 @@
 package verify
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,10 +27,9 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:                   3,
-				Differences:             2,
-				SampleInvalidRows:       map[RowInvalidity]string{},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
+				Total:             3,
+				Differences:       2,
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: false,
 		},
@@ -43,10 +41,9 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:                   3,
-				Differences:             2,
-				SampleInvalidRows:       map[RowInvalidity]string{},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
+				Total:             3,
+				Differences:       2,
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: true,
 		},
@@ -58,10 +55,9 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:                   3,
-				Differences:             2,
-				SampleInvalidRows:       map[RowInvalidity]string{},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
+				Total:             3,
+				Differences:       2,
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: true,
 		},
@@ -73,10 +69,9 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:                   3,
-				Differences:             2,
-				SampleInvalidRows:       map[RowInvalidity]string{},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
+				Total:             3,
+				Differences:       2,
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: false,
 		},
@@ -88,10 +83,9 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
 			c: CheckResult{
-				Total:                   3,
-				Differences:             2,
-				SampleInvalidRows:       map[RowInvalidity]string{},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
+				Total:             3,
+				Differences:       2,
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
 			},
 			laxMode: false,
 		},
@@ -99,9 +93,8 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			gf: "testdata/empty.csv",
 			db: "testdata/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
-				Total:                   0,
-				SampleInvalidRows:       map[RowInvalidity]string{},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
+				Total:             0,
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
 			},
 			emptyOK: true,
 		},
@@ -145,11 +138,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				Total:       2,
 				Differences: 0,
 				Invalid:     2,
-				SampleInvalidRows: map[RowInvalidity]string{
-					FewerFieldsThanExpected: "line 1: expected 5 fields but got 4, " +
-						"row: '2a02:ecc0::/29,US,US-NJ,Parsippany'",
-				},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{
 					FewerFieldsThanExpected: {
 						Line:   1,
 						Type:   FewerFieldsThanExpected,
@@ -170,10 +159,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				Total:       2,
 				Differences: 1,
 				Invalid:     1,
-				SampleInvalidRows: map[RowInvalidity]string{
-					EmptyNetwork: "line 2: network field is empty, row: ',,,,'",
-				},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{
 					EmptyNetwork: {
 						Line:       2,
 						Type:       EmptyNetwork,
@@ -193,21 +179,17 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				Total:       2,
 				Differences: 1,
 				Invalid:     1,
-				SampleInvalidRows: map[RowInvalidity]string{
-					UnableToParseNetwork: `line 1: unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
-				},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{
 					UnableToParseNetwork: {
 						Line:   1,
 						Type:   UnableToParseNetwork,
 						Fields: []string{"2a02:/29", "", "", "", ""},
-						// Reason is curated, unlike Diagnostic and the
-						// SampleInvalidRows message below: it doesn't repeat
-						// the netip.ParsePrefix error text or the network
-						// field's value, so it isn't coupled to a specific Go
-						// version's exact wording of that error, and never
-						// quotes a value that parsing may have altered (e.g.
-						// a synthesized /32 or /64).
+						// Reason is curated, unlike Diagnostic: it doesn't
+						// repeat the netip.ParsePrefix error text or the
+						// network field's value, so it isn't coupled to a
+						// specific Go version's exact wording of that error,
+						// and never quotes a value that parsing may have
+						// altered (e.g. a synthesized /32 or /64).
 						Reason: "The network field is not a valid IP address or CIDR.",
 						Diagnostic: `unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ` +
 							`ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
@@ -225,15 +207,11 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				Total:       3,
 				Differences: 1,
 				Invalid:     2,
-				SampleInvalidRows: map[RowInvalidity]string{
-					InvalidRegionCode: "line 1: invalid ISO 3166-2 region code format " +
-						"in strict (default) mode, row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
-				},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{
 					// Fields keeps the trailing whitespace inside the country
 					// and city fields: it is a snapshot from before
 					// verifyCorrection trims its (aliased) copy, unlike the
-					// message text above.
+					// curated Reason and Diagnostic text.
 					InvalidRegionCode: {
 						Line:   1,
 						Type:   InvalidRegionCode,
@@ -252,9 +230,8 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 			gf: "testdata/empty.csv",
 			db: "testdata/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
-				Total:                   0,
-				SampleInvalidRows:       map[RowInvalidity]string{},
-				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{},
+				Total:             0,
+				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
 			},
 			em:      ErrEmptyGeofeed,
 			emptyOK: false,
@@ -380,7 +357,7 @@ func TestInvalidRowZeroValueTypeIsUnknown(t *testing.T) {
 	assert.NotEqual(t, FewerFieldsThanExpected, zero.Type)
 }
 
-func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
+func TestSampleInvalidRowReportsFileLine(t *testing.T) {
 	counts, _, _, err := ProcessGeofeed(
 		"testdata/comments-then-short-row.csv",
 		"testdata/GeoIP2-City-Test.mmdb",
@@ -389,43 +366,29 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 	)
 	require.ErrorIs(t, err, ErrInvalidGeofeed)
 
-	detail, ok := counts.SampleInvalidRowDetails[FewerFieldsThanExpected]
-	require.True(t, ok, "expected a sample detail for FewerFieldsThanExpected")
+	detail, ok := counts.SampleInvalidRows[FewerFieldsThanExpected]
+	require.True(t, ok, "expected a sample for FewerFieldsThanExpected")
 
-	// The short row is on file line 5. c.Total reports 2 at this point in
-	// processing (it counts data rows: lines 3 and 5, skipping the three
-	// comment lines above: lines 1, 2, and 4), as shown by the legacy
-	// message text below, which embeds c.Total rather than the file line.
+	// The short row is on file line 5: Line is the true file line, counting
+	// the three comment lines above it (lines 1, 2, and 4), not a count of
+	// data rows (which would be 2: lines 3 and 5 are the only data rows up
+	// to and including the short one).
 	assert.Equal(t, 5, detail.Line)
 	assert.Equal(t, FewerFieldsThanExpected, detail.Type)
 	assert.Equal(t, []string{"2.0.0.0/24", "NL", "NL-NH", "Amsterdam"}, detail.Fields)
 	assert.Equal(
 		t,
-		"line 2: expected 5 fields but got 4, row: '2.0.0.0/24,NL,NL-NH,Amsterdam'",
-		counts.SampleInvalidRows[FewerFieldsThanExpected],
-	)
-	// Diagnostic is the same legacy text with the "line %d: " prefix
-	// stripped -- String() supplies it instead.
-	assert.Equal(
-		t,
 		"expected 5 fields but got 4, row: '2.0.0.0/24,NL,NL-NH,Amsterdam'",
 		detail.Diagnostic,
 	)
-
-	// The two maps must never disagree about which row is the sample.
-	assert.Contains(
-		t,
-		counts.SampleInvalidRows[FewerFieldsThanExpected],
-		strings.Join(detail.Fields, ","),
-	)
 }
 
-// TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection covers the
-// second SampleInvalidRowDetails population site: rows that reach
-// verifyCorrection (as opposed to the too-few-fields site covered by
-// TestSampleInvalidRowDetailsReportsFileLine above). Reverting this site's
-// Line back to the comment-skipping row counter must fail this test.
-func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T) {
+// TestSampleInvalidRowReportsFileLineForVerifyCorrection covers the second
+// SampleInvalidRows population site: rows that reach verifyCorrection (as
+// opposed to the too-few-fields site covered by
+// TestSampleInvalidRowReportsFileLine above). Reverting this site's Line
+// back to the comment-skipping row counter must fail this test.
+func TestSampleInvalidRowReportsFileLineForVerifyCorrection(t *testing.T) {
 	counts, _, _, err := ProcessGeofeed(
 		"testdata/comments-then-empty-network.csv",
 		"testdata/GeoIP2-City-Test.mmdb",
@@ -434,23 +397,20 @@ func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T)
 	)
 	require.ErrorIs(t, err, ErrInvalidGeofeed)
 
-	detail, ok := counts.SampleInvalidRowDetails[EmptyNetwork]
-	require.True(t, ok, "expected a sample detail for EmptyNetwork")
+	detail, ok := counts.SampleInvalidRows[EmptyNetwork]
+	require.True(t, ok, "expected a sample for EmptyNetwork")
 
-	// The empty-network row is on file line 5. c.Total would report 2,
-	// because it counts data rows (lines 3 and 5) and skips the three
-	// comment lines above (lines 1, 2, and 4).
+	// The empty-network row is on file line 5: Line counts the three
+	// comment lines above it (lines 1, 2, and 4); Total, by contrast,
+	// counts only data rows (lines 3 and 5), so it is 2 here.
 	assert.Equal(t, 5, detail.Line)
 	assert.Equal(t, EmptyNetwork, detail.Type)
 	assert.Equal(t, []string{"", "", "", "", ""}, detail.Fields)
 	assert.Equal(t, 2, counts.Total)
 	assert.Equal(t, "network field is empty, row: ',,,,'", detail.Diagnostic)
-
-	// The two maps must never disagree about which row is the sample.
-	assert.Contains(t, counts.SampleInvalidRows[EmptyNetwork], strings.Join(detail.Fields, ","))
 }
 
-// TestSampleInvalidRowDetailsFieldsSurviveReuseRecord guards against Fields
+// TestSampleInvalidRowFieldsSurviveReuseRecord guards against Fields
 // aliasing csv.Reader's reused backing array, at both population sites. Each
 // fixture has three same-type invalid rows with distinct field values; only
 // the first of each is captured (first-write-wins), but two more Read calls
@@ -458,7 +418,7 @@ func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T)
 // ReuseRecord is set. If Fields held a view into that array instead of a
 // clone, the captured sample would now read back as the third row's
 // content.
-func TestSampleInvalidRowDetailsFieldsSurviveReuseRecord(t *testing.T) {
+func TestSampleInvalidRowFieldsSurviveReuseRecord(t *testing.T) {
 	t.Run("verifyCorrection site", func(t *testing.T) {
 		counts, _, _, err := ProcessGeofeed(
 			"testdata/reuse-record-empty-network-repeated.csv",
@@ -468,7 +428,7 @@ func TestSampleInvalidRowDetailsFieldsSurviveReuseRecord(t *testing.T) {
 		)
 		require.ErrorIs(t, err, ErrInvalidGeofeed)
 
-		detail, ok := counts.SampleInvalidRowDetails[EmptyNetwork]
+		detail, ok := counts.SampleInvalidRows[EmptyNetwork]
 		require.True(t, ok, "expected a sample detail for EmptyNetwork")
 
 		assert.Equal(t, []string{"", "AAAA", "BBBB", "CCCC", "DDDD"}, detail.Fields)
@@ -483,7 +443,7 @@ func TestSampleInvalidRowDetailsFieldsSurviveReuseRecord(t *testing.T) {
 		)
 		require.ErrorIs(t, err, ErrInvalidGeofeed)
 
-		detail, ok := counts.SampleInvalidRowDetails[FewerFieldsThanExpected]
+		detail, ok := counts.SampleInvalidRows[FewerFieldsThanExpected]
 		require.True(t, ok, "expected a sample detail for FewerFieldsThanExpected")
 
 		assert.Equal(t, []string{"AAAA", "BBBB", "CCCC"}, detail.Fields)
@@ -544,9 +504,9 @@ func TestInvalidRowsHaveDiagnostic(t *testing.T) {
 				Options{},
 			)
 			require.ErrorIs(t, err, ErrInvalidGeofeed)
-			require.NotEmpty(t, counts.SampleInvalidRowDetails, "expected at least one sample")
+			require.NotEmpty(t, counts.SampleInvalidRows, "expected at least one sample")
 
-			for invType, detail := range counts.SampleInvalidRowDetails {
+			for invType, detail := range counts.SampleInvalidRows {
 				assert.NotEmpty(
 					t,
 					detail.Diagnostic,

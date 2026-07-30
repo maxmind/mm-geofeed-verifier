@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/maxmind/mm-geofeed-verifier/v4/verify"
 )
 
 type parseFlagsCorrectTest struct {
@@ -124,5 +126,44 @@ func TestParseFlagsError(t *testing.T) {
 				)
 			},
 		)
+	}
+}
+
+func TestFormatInvalidRows(t *testing.T) {
+	// Keys inserted out of RowInvalidity order, to prove the output order
+	// comes from sorting rather than accidentally matching insertion or map
+	// iteration order.
+	rows := map[verify.RowInvalidity]verify.InvalidRow{
+		verify.InvalidRegionCode: {
+			Line:       3,
+			Diagnostic: "invalid ISO 3166-2 region code format in strict (default) mode, row: 'a,b,c,d,e'",
+		},
+		verify.EmptyNetwork: {
+			Line:       1,
+			Diagnostic: "network field is empty, row: ',,,,'",
+		},
+		// FewerFieldsThanExpected's diagnostic already ends in "row:
+		// '...'": formatInvalidRows must not wrap it in a second layer of
+		// quotes.
+		verify.FewerFieldsThanExpected: {
+			Line:       2,
+			Diagnostic: "expected 5 fields but got 4, row: 'a,b,c,d'",
+		},
+	}
+
+	got := formatInvalidRows(rows)
+
+	// Sorted by RowInvalidity's underlying int value (its iota order), not
+	// map iteration order.
+	want := []string{
+		"FewerFieldsThanExpected: line 2: expected 5 fields but got 4, row: 'a,b,c,d'",
+		"EmptyNetwork: line 1: network field is empty, row: ',,,,'",
+		"InvalidRegionCode: line 3: invalid ISO 3166-2 region code format " +
+			"in strict (default) mode, row: 'a,b,c,d,e'",
+	}
+	assert.Equal(t, want, got)
+
+	for _, line := range got {
+		assert.NotContains(t, line, "''", "line has doubled quotes: %q", line)
 	}
 }
