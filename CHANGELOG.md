@@ -16,6 +16,8 @@
   so `ProcessGeofeed` now returns an error wrapping the new `ErrDatabaseLookup`
   rather than recording the row as invalid. Consumers should treat it as
   operational and leave the geofeed's state unchanged.
+- Breaking: the module path is now `github.com/maxmind/mm-geofeed-verifier/v5`.
+  Update imports accordingly.
 
 ## 4.0.0 (2026-02-16)
 

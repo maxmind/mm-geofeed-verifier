@@ -20,7 +20,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/maxmind/mm-geofeed-verifier/v4/verify"
+	"github.com/maxmind/mm-geofeed-verifier/v5/verify"
 )
 
 // This value is set by build scripts. Changing the name of

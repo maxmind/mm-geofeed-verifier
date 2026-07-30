@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/maxmind/mm-geofeed-verifier/v4/verify"
+	"github.com/maxmind/mm-geofeed-verifier/v5/verify"
 )
 
 type parseFlagsCorrectTest struct {
