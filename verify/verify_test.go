@@ -663,3 +663,38 @@ func TestProcessGeofeedISPDatabaseLookupFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "2a02:ecc0::/29")
 	assert.Contains(t, err.Error(), "IPv6")
 }
+
+// TestProcessGeofeedISPAugmentation covers the ISP augmentation block
+// (asnCounts and the AS Number/AS Name/ISP Name diff lines), which had no
+// coverage at all before ProcessGeofeedISPDatabaseLookupFailure -- and that
+// test never reaches this code, since it errors out of the lookup.
+//
+// geofeed-isp.csv's row is deliberately bogus in its country, region,
+// city, and postal code: ::1.128.0.0/107 is not present in
+// GeoIP2-City-Test.mmdb, so every one of those fields decodes to its zero
+// value, and the bogus values guarantee every comparison mismatches --
+// this is what guarantees foundDiff, and therefore the AS/ISP lines,
+// without depending on real data in a fixture this small. ZZ-ZZ carries a
+// hyphen, so it passes strict-mode region-code validation and the row
+// survives to reach the augmentation code at all.
+func TestProcessGeofeedISPAugmentation(t *testing.T) {
+	c, diffLines, asnCounts, err := ProcessGeofeed(
+		"testdata/geofeed-isp.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
+		"testdata/GeoIP2-ISP-Test.mmdb",
+		Options{},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, c.Total)
+	assert.Equal(t, 1, c.Differences)
+	assert.Equal(t, 0, c.Invalid)
+
+	// ::1.128.0.0/107 in GeoIP2-ISP-Test.mmdb carries ASN 1221, "Telstra Pty
+	// Ltd", ISP "Telstra Internet".
+	assert.Equal(t, map[uint]int{1221: 1}, asnCounts)
+
+	require.Len(t, diffLines, 1)
+	assert.Contains(t, diffLines[0], "AS Number: 1221")
+	assert.Contains(t, diffLines[0], "AS Name: Telstra Pty Ltd")
+	assert.Contains(t, diffLines[0], "ISP Name: Telstra Internet")
+}
