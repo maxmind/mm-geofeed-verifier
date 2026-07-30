@@ -569,24 +569,6 @@ func TestInvalidRowString(t *testing.T) {
 			want: "line 3: unable to parse network foo: bar",
 		},
 		{
-			name: "UnableToFindCityRecord",
-			row: InvalidRow{
-				Line:       4,
-				Type:       UnableToFindCityRecord,
-				Diagnostic: "unable to find city record for 1.2.3.4: not found",
-			},
-			want: "line 4: unable to find city record for 1.2.3.4: not found",
-		},
-		{
-			name: "UnableToFindISPRecord",
-			row: InvalidRow{
-				Line:       5,
-				Type:       UnableToFindISPRecord,
-				Diagnostic: "unable to find ISP record for 1.2.3.4: not found",
-			},
-			want: "line 5: unable to find ISP record for 1.2.3.4: not found",
-		},
-		{
 			name: "InvalidRegionCode",
 			row: InvalidRow{
 				Line:       6,

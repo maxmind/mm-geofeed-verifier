@@ -155,13 +155,20 @@ func ProcessGeofeed(
 		correction := row[:expectedFieldsPerRecord]
 		fields := slices.Clone(correction)
 
-		diffLine, result := verifyCorrection(
+		diffLine, result, err := verifyCorrection(
 			correction,
 			db,
 			ispdb,
 			asnCounts,
 			opts,
 		)
+		if err != nil {
+			// A lookup failure means the database is unusable, not that
+			// this row is invalid: the row was never evaluated, so it must
+			// not be recorded as a sample invalid row, and processing
+			// cannot usefully continue for the rows after it either.
+			return c, diffLines, asnCounts, err
+		}
 		if !result.valid {
 			if _, ok := c.SampleInvalidRows[result.invalidityType]; !ok {
 				c.SampleInvalidRows[result.invalidityType] = newInvalidRow(
@@ -212,13 +219,6 @@ func sampleLine(csvReader *csv.Reader, row []string) int {
 	line, _ := csvReader.FieldPos(0)
 	return line
 }
-
-// cityRecordUnavailableReason is the curated reason shared by every
-// verifyCorrection failure to decode a city-database field: subdivision,
-// country, city name, and postal code all fail the same way for the same
-// underlying cause (no record for the network), so they read identically
-// to a consumer of InvalidRow.
-const cityRecordUnavailableReason = "No geolocation data is available for this network in the current database."
 
 type verificationResult struct {
 	valid          bool
@@ -286,7 +286,7 @@ func verifyCorrection(
 	db, ispdb *maxminddb.Reader,
 	asnCounts map[uint]int,
 	opts Options,
-) (string, verificationResult) {
+) (string, verificationResult, error) {
 	/*
 	   0: network (CIDR or single IP)
 	   1: ISO-3166 country code
@@ -309,7 +309,7 @@ func verifyCorrection(
 				strings.Join(correction, ","),
 			),
 			reason: "The network field is empty.",
-		}
+		}, nil
 	}
 	if !(strings.Contains(networkOrIP, "/")) {
 		if strings.Contains(networkOrIP, ":") {
@@ -325,82 +325,62 @@ func verifyCorrection(
 			invalidityType: UnableToParseNetwork,
 			diagnostic:     fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
 			reason:         "The network field is not a valid IP address or CIDR.",
-		}
+		}, nil
 	}
 
 	if db == nil {
 		// format-only mode: only the DB-independent region-code format rule applies.
 		if !strings.Contains(correction[2], "-") && correction[2] != "" && !opts.LaxMode {
-			return "", invalidRegionCodeResult(correction)
+			return "", invalidRegionCodeResult(correction), nil
 		}
 		return "", verificationResult{
 			valid:          true,
 			invalidityType: UnknownInvalidity,
 			diagnostic:     "",
-		}
+		}, nil
 	}
 
 	// XXX - should we be checking the whole network?
 	result := db.Lookup(network.Addr())
 
-	var mostSpecificSubdivision string
-	err = result.DecodePath(&mostSpecificSubdivision, "subdivisions", -1, "iso_code")
-	if err != nil {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: UnableToFindCityRecord,
-			diagnostic: fmt.Sprintf(
-				"unable to find city record for %s: %s",
-				networkOrIP,
-				err,
-			),
-			reason: cityRecordUnavailableReason,
-		}
+	// A record present for this network always decodes cleanly (a missing
+	// record yields a nil error and a zero-valued struct, per
+	// Result.Decode), so an error here means the database itself is
+	// unusable, not that the row is invalid -- that's why this returns an
+	// error instead of a verificationResult.
+	var cityRecord struct {
+		Subdivisions []struct {
+			ISOCode string `maxminddb:"iso_code"`
+		} `maxminddb:"subdivisions"`
+		Country struct {
+			ISOCode string `maxminddb:"iso_code"`
+		} `maxminddb:"country"`
+		City struct {
+			Names struct {
+				English string `maxminddb:"en"`
+			} `maxminddb:"names"`
+		} `maxminddb:"city"`
+		Postal struct {
+			Code string `maxminddb:"code"`
+		} `maxminddb:"postal"`
 	}
-
-	var countryCode string
-	err = result.DecodePath(&countryCode, "country", "iso_code")
-	if err != nil {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: UnableToFindCityRecord,
-			diagnostic: fmt.Sprintf(
-				"unable to find city record for %s: %s",
-				networkOrIP,
-				err,
-			),
-			reason: cityRecordUnavailableReason,
-		}
+	if err := result.Decode(&cityRecord); err != nil {
+		return "", verificationResult{}, fmt.Errorf(
+			"decoding city database record for %s: %w: %w",
+			networkOrIP,
+			ErrDatabaseLookup,
+			err,
+		)
 	}
+	countryCode := cityRecord.Country.ISOCode
+	cityName := cityRecord.City.Names.English
+	postalCode := cityRecord.Postal.Code
 
-	var cityName string
-	err = result.DecodePath(&cityName, "city", "names", "en")
-	if err != nil {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: UnableToFindCityRecord,
-			diagnostic: fmt.Sprintf(
-				"unable to find city record for %s: %s",
-				networkOrIP,
-				err,
-			),
-			reason: cityRecordUnavailableReason,
-		}
-	}
-
-	var postalCode string
-	err = result.DecodePath(&postalCode, "postal", "code")
-	if err != nil {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: UnableToFindCityRecord,
-			diagnostic: fmt.Sprintf(
-				"unable to find city record for %s: %s",
-				networkOrIP,
-				err,
-			),
-			reason: cityRecordUnavailableReason,
-		}
+	// Subdivisions run least to most specific, so the last entry is the
+	// most specific one. A record with no subdivisions leaves this empty.
+	mostSpecificSubdivision := ""
+	if n := len(cityRecord.Subdivisions); n > 0 {
+		mostSpecificSubdivision = cityRecord.Subdivisions[n-1].ISOCode
 	}
 
 	// ISO-3166-2 region codes are prefixed with the ISO country code,
@@ -409,7 +389,7 @@ func verifyCorrection(
 	if strings.Contains(correction[2], "-") {
 		mostSpecificSubdivision = countryCode + "-" + mostSpecificSubdivision
 	} else if correction[2] != "" && !opts.LaxMode {
-		return "", invalidRegionCodeResult(correction)
+		return "", invalidRegionCodeResult(correction), nil
 	}
 
 	asNumber := uint(0)
@@ -422,19 +402,16 @@ func verifyCorrection(
 			ISP                          string `maxminddb:"isp"`
 		}
 		// XXX - should we be checking the whole network?
-		err := ispdb.Lookup(network.Addr()).Decode(&ispRecord)
-		if err != nil {
-			return "", verificationResult{
-				valid:          false,
-				invalidityType: UnableToFindISPRecord,
-				diagnostic: fmt.Sprintf(
-					"unable to find ISP record for %s: %s",
-					networkOrIP,
-					err,
-				),
-				reason: "No ISP or autonomous system information is available for " +
-					"this network in the current database.",
-			}
+		// A missing record decodes cleanly to ispRecord's zero value, as
+		// with the city record above; an error here means the ISP
+		// database itself is unusable.
+		if err := ispdb.Lookup(network.Addr()).Decode(&ispRecord); err != nil {
+			return "", verificationResult{}, fmt.Errorf(
+				"decoding ISP database record for %s: %w: %w",
+				networkOrIP,
+				ErrDatabaseLookup,
+				err,
+			)
 		}
 		asNumber = ispRecord.AutonomousSystemNumber
 		asName = ispRecord.AutonomousSystemOrganization
@@ -531,11 +508,11 @@ func verifyCorrection(
 			valid:          true,
 			invalidityType: UnknownInvalidity,
 			diagnostic:     "",
-		}
+		}, nil
 	}
 	return "", verificationResult{
 		valid:          true,
 		invalidityType: UnknownInvalidity,
 		diagnostic:     "",
-	}
+	}, nil
 }

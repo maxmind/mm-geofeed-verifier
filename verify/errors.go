@@ -17,6 +17,10 @@ var (
 	ErrInvalidGeofeed = errors.New("geofeed does not comply with the RFC 8805 standards")
 	// ErrEmptyGeofeed indicates a Geofeed with no records.
 	ErrEmptyGeofeed = errors.New("geofeed is empty")
+	// ErrDatabaseLookup indicates that an MMDB lookup failed. The geofeed was
+	// not evaluated, so a consumer must not change the feed's status on this
+	// error -- it signals a problem with the database, not with the geofeed.
+	ErrDatabaseLookup = errors.New("mmdb lookup failed")
 )
 
 // RowInvalidity represents type of row invalidity.
@@ -32,8 +36,6 @@ const (
 	FewerFieldsThanExpected
 	EmptyNetwork
 	UnableToParseNetwork
-	UnableToFindCityRecord
-	UnableToFindISPRecord
 	InvalidRegionCode
 )
 
@@ -48,10 +50,6 @@ func (ri RowInvalidity) String() string {
 		return "EmptyNetwork"
 	case UnableToParseNetwork:
 		return "UnableToParseNetwork"
-	case UnableToFindCityRecord:
-		return "UnableToFindCityRecord"
-	case UnableToFindISPRecord:
-		return "UnableToFindISPRecord"
 	case InvalidRegionCode:
 		return "InvalidRegionCode"
 	default:
@@ -65,9 +63,9 @@ type InvalidRow struct {
 	// counting comment and blank lines.
 	Line int
 	// Type is the kind of invalidity found in the row. It is redundant with
-	// the key of the SampleInvalidRowDetails map this InvalidRow came from,
-	// but is included so a value handled independently of that map (for
-	// example, passed on its own to a renderer) can still be identified.
+	// the key of the SampleInvalidRows map this InvalidRow came from, but is
+	// included so a value handled independently of that map (for example,
+	// passed on its own to a renderer) can still be identified.
 	// The zero value is UnknownInvalidity, not FewerFieldsThanExpected.
 	Type RowInvalidity
 	// Fields holds the row's fields as parsed from the file, before any
