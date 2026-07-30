@@ -21,8 +21,8 @@ type processGeofeedTest struct {
 func TestProcessGeofeed_Valid(t *testing.T) {
 	goodTests := []processGeofeedTest{
 		{
-			gf: "test_data/geofeed-valid.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-valid.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			dl: []string{
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
@@ -36,8 +36,8 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			laxMode: false,
 		},
 		{
-			gf: "test_data/geofeed-valid.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-valid.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			dl: []string{
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
@@ -51,8 +51,8 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			laxMode: true,
 		},
 		{
-			gf: "test_data/geofeed-valid-lax.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-valid-lax.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			dl: []string{
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
@@ -66,8 +66,8 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			laxMode: true,
 		},
 		{
-			gf: "test_data/geofeed-valid-optional-fields.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-valid-optional-fields.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			dl: []string{
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
@@ -81,8 +81,8 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			laxMode: false,
 		},
 		{
-			gf: "test_data/geofeed-valid-utf8-bom.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-valid-utf8-bom.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			dl: []string{
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
@@ -96,8 +96,8 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 			laxMode: false,
 		},
 		{
-			gf: "test_data/empty.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/empty.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
 				Total:                   0,
 				SampleInvalidRows:       map[RowInvalidity]string{},
@@ -139,8 +139,8 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 func TestProcessGeofeed_Invalid(t *testing.T) {
 	badTests := []processGeofeedTest{
 		{
-			gf: "test_data/geofeed-invalid-missing-fields.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-invalid-missing-fields.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
 				Total:       2,
 				Differences: 0,
@@ -162,8 +162,8 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 			laxMode: false,
 		},
 		{
-			gf: "test_data/geofeed-invalid-empty-network.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-invalid-empty-network.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
 				Total:       2,
 				Differences: 1,
@@ -184,8 +184,8 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 			laxMode: false,
 		},
 		{
-			gf: "test_data/geofeed-invalid-network.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-invalid-network.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
 				Total:       2,
 				Differences: 1,
@@ -213,8 +213,8 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 		},
 		{
 			// Geofeed that is valid in lax mode should not be valid if laxMode == true.
-			gf: "test_data/geofeed-valid-lax.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/geofeed-valid-lax.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
 				Total:       3,
 				Differences: 1,
@@ -241,8 +241,8 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 			laxMode: false,
 		},
 		{
-			gf: "test_data/empty.csv",
-			db: "test_data/GeoIP2-City-Test.mmdb",
+			gf: "testdata/empty.csv",
+			db: "testdata/GeoIP2-City-Test.mmdb",
 			c: CheckResult{
 				Total:                   0,
 				SampleInvalidRows:       map[RowInvalidity]string{},
@@ -280,7 +280,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 func TestProcessGeofeed_FormatOnly(t *testing.T) {
 	t.Run("valid feed, format-only", func(t *testing.T) {
 		c, dl, asnCounts, err := ProcessGeofeed(
-			"test_data/geofeed-valid.csv",
+			"testdata/geofeed-valid.csv",
 			"",
 			"",
 			Options{},
@@ -295,7 +295,7 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 
 	t.Run("malformed feed, format-only", func(t *testing.T) {
 		c, _, _, err := ProcessGeofeed(
-			"test_data/geofeed-invalid-missing-fields.csv",
+			"testdata/geofeed-invalid-missing-fields.csv",
 			"",
 			"",
 			Options{},
@@ -311,7 +311,7 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 
 	t.Run("bad region code in strict mode, format-only", func(t *testing.T) {
 		c, _, _, err := ProcessGeofeed(
-			"test_data/geofeed-valid-lax.csv",
+			"testdata/geofeed-valid-lax.csv",
 			"",
 			"",
 			Options{LaxMode: false},
@@ -329,7 +329,7 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 
 	t.Run("lax mode accepts non-prefixed region codes, format-only", func(t *testing.T) {
 		c, dl, asnCounts, err := ProcessGeofeed(
-			"test_data/geofeed-valid-lax.csv",
+			"testdata/geofeed-valid-lax.csv",
 			"",
 			"",
 			Options{LaxMode: true},
@@ -344,7 +344,7 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 
 	t.Run("empty mmdb path opens no DB", func(t *testing.T) {
 		_, _, _, err := ProcessGeofeed(
-			"test_data/geofeed-valid.csv",
+			"testdata/geofeed-valid.csv",
 			"",
 			"",
 			Options{},
@@ -354,8 +354,8 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 
 	t.Run("missing mmdb path still errors", func(t *testing.T) {
 		_, _, _, err := ProcessGeofeed(
-			"test_data/geofeed-valid.csv",
-			"test_data/does-not-exist.mmdb",
+			"testdata/geofeed-valid.csv",
+			"testdata/does-not-exist.mmdb",
 			"",
 			Options{},
 		)
@@ -374,8 +374,8 @@ func TestInvalidRowZeroValueTypeIsUnknown(t *testing.T) {
 
 func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 	counts, _, _, err := ProcessGeofeed(
-		"test_data/comments-then-short-row.csv",
-		"test_data/GeoIP2-City-Test.mmdb",
+		"testdata/comments-then-short-row.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
 		"",
 		Options{LaxMode: true, HideFilePathsInErrorMessages: true},
 	)
@@ -412,8 +412,8 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 // Line back to the comment-skipping row counter must fail this test.
 func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T) {
 	counts, _, _, err := ProcessGeofeed(
-		"test_data/comments-then-empty-network.csv",
-		"test_data/GeoIP2-City-Test.mmdb",
+		"testdata/comments-then-empty-network.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
 		"",
 		Options{},
 	)
@@ -445,8 +445,8 @@ func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T)
 func TestSampleInvalidRowDetailsFieldsSurviveReuseRecord(t *testing.T) {
 	t.Run("verifyCorrection site", func(t *testing.T) {
 		counts, _, _, err := ProcessGeofeed(
-			"test_data/reuse-record-empty-network-repeated.csv",
-			"test_data/GeoIP2-City-Test.mmdb",
+			"testdata/reuse-record-empty-network-repeated.csv",
+			"testdata/GeoIP2-City-Test.mmdb",
 			"",
 			Options{},
 		)
@@ -460,8 +460,8 @@ func TestSampleInvalidRowDetailsFieldsSurviveReuseRecord(t *testing.T) {
 
 	t.Run("too-few-fields site", func(t *testing.T) {
 		counts, _, _, err := ProcessGeofeed(
-			"test_data/reuse-record-short-row-repeated.csv",
-			"test_data/GeoIP2-City-Test.mmdb",
+			"testdata/reuse-record-short-row-repeated.csv",
+			"testdata/GeoIP2-City-Test.mmdb",
 			"",
 			Options{},
 		)
@@ -480,11 +480,11 @@ func TestProcessGeofeed_NonUTF8(t *testing.T) {
 		desc string
 	}{
 		{
-			gf:   "test_data/geofeed-valid-utf16le.csv",
+			gf:   "testdata/geofeed-valid-utf16le.csv",
 			desc: "UTF-16 LE encoded geofeed",
 		},
 		{
-			gf:   "test_data/geofeed-valid-shiftjis.csv",
+			gf:   "testdata/geofeed-valid-shiftjis.csv",
 			desc: "Shift-JIS encoded geofeed",
 		},
 	}
@@ -493,7 +493,7 @@ func TestProcessGeofeed_NonUTF8(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			_, _, _, err := ProcessGeofeed(
 				test.gf,
-				"test_data/GeoIP2-City-Test.mmdb",
+				"testdata/GeoIP2-City-Test.mmdb",
 				"",
 				Options{},
 			)
