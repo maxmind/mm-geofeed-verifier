@@ -1,6 +1,9 @@
 package verify
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	// ErrNotUTF8 indicates a file encoding that is not valid UTF-8 (with
@@ -86,4 +89,18 @@ type InvalidRow struct {
 	// It is unstable, must not be parsed, and must not be shown to a
 	// geofeed's owner -- use Reason for that.
 	Diagnostic string
+}
+
+// String returns engineer-facing text of the form "line 5: <Diagnostic>".
+// Like Diagnostic, it must not be shown to a geofeed's owner.
+//
+// This is a value receiver so that %s formats map[RowInvalidity]InvalidRow
+// values too, which are not addressable and so cannot satisfy an interface
+// requiring a pointer receiver. It intentionally omits Type -- both of this
+// method's call sites already print that themselves -- and it does not
+// fall back to Reason when Diagnostic is empty: a bare "line 0: " for a
+// zero-valued InvalidRow is correct, and a fallback would make an
+// engineer-facing renderer silently emit customer-facing text instead.
+func (r InvalidRow) String() string {
+	return fmt.Sprintf("line %d: %s", r.Line, r.Diagnostic)
 }

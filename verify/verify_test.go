@@ -517,3 +517,144 @@ func TestProcessGeofeed_NonUTF8(t *testing.T) {
 		})
 	}
 }
+
+// TestInvalidRowsHaveDiagnostic asserts that every InvalidRow ProcessGeofeed
+// produces has a non-empty Diagnostic. That property, not any one kind's
+// exact wording, is what String() depends on: it has no fallback to Reason,
+// so a future invalidity kind added without a diagnostic would silently
+// render as "line N: " instead of failing a test.
+func TestInvalidRowsHaveDiagnostic(t *testing.T) {
+	fixtures := []string{
+		// FewerFieldsThanExpected.
+		"testdata/geofeed-invalid-missing-fields.csv",
+		// EmptyNetwork.
+		"testdata/geofeed-invalid-empty-network.csv",
+		// UnableToParseNetwork.
+		"testdata/geofeed-invalid-network.csv",
+		// InvalidRegionCode, in strict (default) mode.
+		"testdata/geofeed-valid-lax.csv",
+	}
+
+	for _, gf := range fixtures {
+		t.Run(gf, func(t *testing.T) {
+			counts, _, _, err := ProcessGeofeed(
+				gf,
+				"testdata/GeoIP2-City-Test.mmdb",
+				"",
+				Options{},
+			)
+			require.ErrorIs(t, err, ErrInvalidGeofeed)
+			require.NotEmpty(t, counts.SampleInvalidRowDetails, "expected at least one sample")
+
+			for invType, detail := range counts.SampleInvalidRowDetails {
+				assert.NotEmpty(
+					t,
+					detail.Diagnostic,
+					"invalidity type %s has an empty Diagnostic",
+					invType,
+				)
+			}
+		})
+	}
+}
+
+func TestInvalidRowString(t *testing.T) {
+	tests := []struct {
+		name string
+		row  InvalidRow
+		want string
+	}{
+		{
+			name: "zero value",
+			row:  InvalidRow{},
+			want: "line 0: ",
+		},
+		{
+			// A Reason without a Diagnostic must not fall back to Reason:
+			// that would make an engineer-facing renderer silently emit
+			// customer-facing text instead.
+			name: "empty Diagnostic does not fall back to Reason",
+			row: InvalidRow{
+				Line:   7,
+				Type:   EmptyNetwork,
+				Reason: "The network field is empty.",
+			},
+			want: "line 7: ",
+		},
+		{
+			name: "FewerFieldsThanExpected",
+			row: InvalidRow{
+				Line:       1,
+				Type:       FewerFieldsThanExpected,
+				Diagnostic: "expected 5 fields but got 4, row: 'a,b,c,d'",
+			},
+			want: "line 1: expected 5 fields but got 4, row: 'a,b,c,d'",
+		},
+		{
+			name: "EmptyNetwork",
+			row: InvalidRow{
+				Line:       2,
+				Type:       EmptyNetwork,
+				Diagnostic: "network field is empty, row: ',,,,'",
+			},
+			want: "line 2: network field is empty, row: ',,,,'",
+		},
+		{
+			name: "UnableToParseNetwork",
+			row: InvalidRow{
+				Line:       3,
+				Type:       UnableToParseNetwork,
+				Diagnostic: "unable to parse network foo: bar",
+			},
+			want: "line 3: unable to parse network foo: bar",
+		},
+		{
+			name: "UnableToFindCityRecord",
+			row: InvalidRow{
+				Line:       4,
+				Type:       UnableToFindCityRecord,
+				Diagnostic: "unable to find city record for 1.2.3.4: not found",
+			},
+			want: "line 4: unable to find city record for 1.2.3.4: not found",
+		},
+		{
+			name: "UnableToFindISPRecord",
+			row: InvalidRow{
+				Line:       5,
+				Type:       UnableToFindISPRecord,
+				Diagnostic: "unable to find ISP record for 1.2.3.4: not found",
+			},
+			want: "line 5: unable to find ISP record for 1.2.3.4: not found",
+		},
+		{
+			name: "InvalidRegionCode",
+			row: InvalidRow{
+				Line:       6,
+				Type:       InvalidRegionCode,
+				Diagnostic: "invalid ISO 3166-2 region code format in strict (default) mode, row: 'a,b,c,d,e'",
+			},
+			want: "line 6: invalid ISO 3166-2 region code format in strict (default) mode, row: 'a,b,c,d,e'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// want never mentions Type even though every non-zero case sets
+			// a different one: String() must not include it.
+			assert.Equal(t, tt.want, tt.row.String())
+		})
+	}
+}
+
+// TestInvalidRowStringOnMapValue proves String() works when called on a
+// map value, which is not addressable. A pointer receiver would fail to
+// compile against this call, since Go cannot take the address of a map
+// value to satisfy a pointer-receiver method.
+func TestInvalidRowStringOnMapValue(t *testing.T) {
+	m := map[RowInvalidity]InvalidRow{
+		EmptyNetwork: {Line: 1, Diagnostic: "network field is empty, row: ',,,,'"},
+	}
+
+	got := m[EmptyNetwork].String()
+	assert.Equal(t, "line 1: network field is empty, row: ',,,,'", got)
+}
