@@ -1,6 +1,8 @@
 package verify
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -599,4 +601,65 @@ func TestInvalidRowStringOnMapValue(t *testing.T) {
 
 	got := m[EmptyNetwork].String()
 	assert.Equal(t, "line 1: network field is empty, row: ',,,,'", got)
+}
+
+// TestProcessGeofeedCityDatabaseLookupFailure covers the city-database
+// lookup-failure path: MaxMind-DB-test-ipv4-24.mmdb is IPv4-only, so
+// Reader.Lookup returns an error for any IPv6 address, and that error
+// reaches DecodePath verbatim. geofeed-valid.csv's first row is an IPv6
+// network, so it triggers this on the very first row processed.
+func TestProcessGeofeedCityDatabaseLookupFailure(t *testing.T) {
+	geofeedData, readErr := os.ReadFile("testdata/geofeed-valid.csv")
+	require.NoError(t, readErr)
+	firstLine, _, _ := strings.Cut(string(geofeedData), "\n")
+	// If this fails, the fixture's first row no longer exercises an IPv6
+	// lookup against an IPv4-only database, and the rest of this test is
+	// silently exercising nothing.
+	require.Contains(
+		t,
+		firstLine,
+		"2a02:ecc0::/29",
+		"fixture's first row must still be an IPv6 network",
+	)
+
+	_, _, _, err := ProcessGeofeed(
+		"testdata/geofeed-valid.csv",
+		"testdata/MaxMind-DB-test-ipv4-24.mmdb",
+		"",
+		Options{},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrDatabaseLookup)
+	// Contains, not exact equality: the wording past this point belongs to
+	// maxminddb-golang, and a library or Go upgrade could reword it.
+	assert.Contains(t, err.Error(), "2a02:ecc0::/29")
+	assert.Contains(t, err.Error(), "IPv6")
+}
+
+// TestProcessGeofeedISPDatabaseLookupFailure covers the ISP-database
+// lookup-failure path, the first test in this repo to pass a non-empty
+// ispFilename. The city database (GeoIP2-City-Test.mmdb) resolves the
+// IPv6 network in geofeed-valid.csv's first row successfully; only the ISP
+// database (MaxMind-DB-test-ipv4-24.mmdb, IPv4-only) fails to look it up.
+func TestProcessGeofeedISPDatabaseLookupFailure(t *testing.T) {
+	geofeedData, readErr := os.ReadFile("testdata/geofeed-valid.csv")
+	require.NoError(t, readErr)
+	firstLine, _, _ := strings.Cut(string(geofeedData), "\n")
+	require.Contains(
+		t,
+		firstLine,
+		"2a02:ecc0::/29",
+		"fixture's first row must still be an IPv6 network",
+	)
+
+	_, _, _, err := ProcessGeofeed(
+		"testdata/geofeed-valid.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
+		"testdata/MaxMind-DB-test-ipv4-24.mmdb",
+		Options{},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrDatabaseLookup)
+	assert.Contains(t, err.Error(), "2a02:ecc0::/29")
+	assert.Contains(t, err.Error(), "IPv6")
 }
