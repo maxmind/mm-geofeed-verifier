@@ -154,7 +154,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Line:   1,
 						Type:   FewerFieldsThanExpected,
 						Fields: []string{"2a02:ecc0::/29", "US", "US-NJ", "Parsippany"},
-						Reason: "expected 5 fields but got 4",
+						Reason: "The row has 4 fields, but a geofeed row requires 5.",
 					},
 				},
 			},
@@ -176,7 +176,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Line:   2,
 						Type:   EmptyNetwork,
 						Fields: []string{"", "", "", "", ""},
-						Reason: "network field is empty, row: ',,,,'",
+						Reason: "The network field is empty.",
 					},
 				},
 			},
@@ -198,8 +198,11 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Line:   1,
 						Type:   UnableToParseNetwork,
 						Fields: []string{"2a02:/29", "", "", "", ""},
-						Reason: `unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ` +
-							`ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
+						// Curated wording, unlike the SampleInvalidRows message
+						// above: it doesn't repeat the netip.ParsePrefix error
+						// text, so it isn't coupled to a specific Go version's
+						// exact wording of that error.
+						Reason: `The network field "2a02:/29" is not a valid IP address or CIDR.`,
 					},
 				},
 			},
@@ -227,8 +230,8 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Line:   1,
 						Type:   InvalidRegionCode,
 						Fields: []string{"2a02:ecc0::/29 ", "US", "NJ ", "Parsippany ", ""},
-						Reason: "invalid ISO 3166-2 region code format in strict (default) mode, " +
-							"row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
+						Reason: "The region code is not in ISO 3166-2 format (for example, US-CA). " +
+							"Enable lax mode to accept a region code without the country prefix.",
 					},
 				},
 			},

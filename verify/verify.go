@@ -153,9 +153,9 @@ func ProcessGeofeed(
 					// the next Read; clone it so this sample survives.
 					Fields: slices.Clone(row),
 					Reason: fmt.Sprintf(
-						"expected %d fields but got %d",
-						expectedFieldsPerRecord,
+						"The row has %d fields, but a geofeed row requires %d.",
 						len(row),
+						expectedFieldsPerRecord,
 					),
 				}
 			}
@@ -187,7 +187,7 @@ func ProcessGeofeed(
 					Line:   sampleLine(csvReader, row),
 					Type:   result.invalidityType,
 					Fields: fields,
-					Reason: result.invalidityReason,
+					Reason: result.curatedReason,
 				}
 			}
 			c.Invalid++
@@ -233,10 +233,24 @@ func sampleLine(csvReader *csv.Reader, row []string) int {
 	return line
 }
 
+// cityRecordUnavailableReason is the curated reason shared by every
+// verifyCorrection failure to decode a city-database field: subdivision,
+// country, city name, and postal code all fail the same way for the same
+// underlying cause (no record for the network), so they read identically
+// to a consumer of InvalidRow.
+const cityRecordUnavailableReason = "No geolocation data is available for this network in the current database."
+
 type verificationResult struct {
-	valid            bool
-	invalidityType   RowInvalidity
+	valid          bool
+	invalidityType RowInvalidity
+	// invalidityReason is internal diagnostic text: it feeds
+	// SampleInvalidRows and may embed raw error text or the row itself.
 	invalidityReason string
+	// curatedReason is customer-facing wording for the same failure: it
+	// feeds InvalidRow.Reason instead of invalidityReason, so that
+	// InvalidRow.Reason never repeats the row (InvalidRow.Fields already
+	// carries it) and never surfaces an internal error or a library name.
+	curatedReason string
 }
 
 func invalidRegionCodeResult(correction []string) verificationResult {
@@ -247,6 +261,8 @@ func invalidRegionCodeResult(correction []string) verificationResult {
 			"invalid ISO 3166-2 region code format in strict (default) mode, row: '%s'",
 			strings.Join(correction, ","),
 		),
+		curatedReason: "The region code is not in ISO 3166-2 format (for example, US-CA). " +
+			"Enable lax mode to accept a region code without the country prefix.",
 	}
 }
 
@@ -277,6 +293,7 @@ func verifyCorrection(
 				"network field is empty, row: '%s'",
 				strings.Join(correction, ","),
 			),
+			curatedReason: "The network field is empty.",
 		}
 	}
 	if !(strings.Contains(networkOrIP, "/")) {
@@ -292,6 +309,10 @@ func verifyCorrection(
 			valid:            false,
 			invalidityType:   UnableToParseNetwork,
 			invalidityReason: fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
+			curatedReason: fmt.Sprintf(
+				"The network field %q is not a valid IP address or CIDR.",
+				networkOrIP,
+			),
 		}
 	}
 
@@ -321,6 +342,7 @@ func verifyCorrection(
 				networkOrIP,
 				err,
 			),
+			curatedReason: cityRecordUnavailableReason,
 		}
 	}
 
@@ -335,6 +357,7 @@ func verifyCorrection(
 				networkOrIP,
 				err,
 			),
+			curatedReason: cityRecordUnavailableReason,
 		}
 	}
 
@@ -349,6 +372,7 @@ func verifyCorrection(
 				networkOrIP,
 				err,
 			),
+			curatedReason: cityRecordUnavailableReason,
 		}
 	}
 
@@ -363,6 +387,7 @@ func verifyCorrection(
 				networkOrIP,
 				err,
 			),
+			curatedReason: cityRecordUnavailableReason,
 		}
 	}
 
@@ -395,6 +420,8 @@ func verifyCorrection(
 					networkOrIP,
 					err,
 				),
+				curatedReason: "No ISP or autonomous system information is available for " +
+					"this network in the current database.",
 			}
 		}
 		asNumber = ispRecord.AutonomousSystemNumber
