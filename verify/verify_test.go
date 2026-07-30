@@ -151,6 +151,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
 					FewerFieldsThanExpected: {
 						Line:   1,
+						Type:   FewerFieldsThanExpected,
 						Row:    "2a02:ecc0::/29,US,US-NJ,Parsippany",
 						Reason: "expected 5 fields but got 4",
 					},
@@ -172,6 +173,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
 					EmptyNetwork: {
 						Line:   2,
+						Type:   EmptyNetwork,
 						Row:    ",,,,",
 						Reason: "network field is empty, row: ',,,,'",
 					},
@@ -193,6 +195,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
 					UnableToParseNetwork: {
 						Line: 1,
+						Type: UnableToParseNetwork,
 						Row:  "2a02:/29,,,,",
 						Reason: `unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ` +
 							`ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
@@ -220,6 +223,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					// trims its (aliased) copy, unlike the message text above.
 					InvalidRegionCode: {
 						Line: 1,
+						Type: InvalidRegionCode,
 						Row:  "2a02:ecc0::/29 ,US,NJ ,Parsippany ,",
 						Reason: "invalid ISO 3166-2 region code format in strict (default) mode, " +
 							"row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
@@ -352,6 +356,15 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 	})
 }
 
+// TestInvalidRowZeroValueTypeIsUnknown guards against RowInvalidity's zero
+// value silently meaning FewerFieldsThanExpected. Without the
+// UnknownInvalidity sentinel occupying iota 0, this would fail.
+func TestInvalidRowZeroValueTypeIsUnknown(t *testing.T) {
+	var zero InvalidRow
+	assert.Equal(t, UnknownInvalidity, zero.Type)
+	assert.NotEqual(t, FewerFieldsThanExpected, zero.Type)
+}
+
 func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 	counts, _, _, err := ProcessGeofeed(
 		"test_data/comments-then-short-row.csv",
@@ -369,6 +382,7 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 	// comment lines above: lines 1, 2, and 4), as shown by the legacy
 	// message text below, which embeds c.Total rather than the file line.
 	assert.Equal(t, 5, detail.Line)
+	assert.Equal(t, FewerFieldsThanExpected, detail.Type)
 	assert.Equal(t, "2.0.0.0/24,NL,NL-NH,Amsterdam", detail.Row)
 	assert.Equal(
 		t,
@@ -401,6 +415,7 @@ func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T)
 	// because it counts data rows (lines 3 and 5) and skips the three
 	// comment lines above (lines 1, 2, and 4).
 	assert.Equal(t, 5, detail.Line)
+	assert.Equal(t, EmptyNetwork, detail.Type)
 	assert.Equal(t, ",,,,", detail.Row)
 	assert.Equal(t, 2, counts.Total)
 

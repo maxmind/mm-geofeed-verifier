@@ -21,7 +21,12 @@ type RowInvalidity int
 
 // Invalidity types.
 const (
-	FewerFieldsThanExpected RowInvalidity = iota
+	// UnknownInvalidity is the zero value of RowInvalidity. It is not a real
+	// invalidity: it is what a RowInvalidity reads as when unset, so that a
+	// zero-valued InvalidRow does not silently claim to be
+	// FewerFieldsThanExpected.
+	UnknownInvalidity RowInvalidity = iota
+	FewerFieldsThanExpected
 	EmptyNetwork
 	UnableToParseNetwork
 	UnableToFindCityRecord
@@ -32,6 +37,8 @@ const (
 // String implements the Stringer interface.
 func (ri RowInvalidity) String() string {
 	switch ri {
+	case UnknownInvalidity:
+		return "UnknownInvalidity"
 	case FewerFieldsThanExpected:
 		return "FewerFieldsThanExpected"
 	case EmptyNetwork:
@@ -54,6 +61,12 @@ type InvalidRow struct {
 	// Line is the 1-based line number of the row in the geofeed file,
 	// counting comment and blank lines.
 	Line int
+	// Type is the kind of invalidity found in the row. It is redundant with
+	// the key of the SampleInvalidRowDetails map this InvalidRow came from,
+	// but is included so a value handled independently of that map (for
+	// example, passed on its own to a renderer) can still be identified.
+	// The zero value is UnknownInvalidity, not FewerFieldsThanExpected.
+	Type RowInvalidity
 	// Row is the row as read, with fields rejoined by commas, before any
 	// trimming performed during verification. Only the fields verification
 	// examines are included: all of them for a too-short row, otherwise the

@@ -148,6 +148,7 @@ func ProcessGeofeed(
 				)
 				c.SampleInvalidRowDetails[FewerFieldsThanExpected] = InvalidRow{
 					Line: sampleLine(csvReader, row),
+					Type: FewerFieldsThanExpected,
 					Row:  joined,
 					Reason: fmt.Sprintf(
 						"expected %d fields but got %d",
@@ -182,6 +183,7 @@ func ProcessGeofeed(
 				)
 				c.SampleInvalidRowDetails[result.invalidityType] = InvalidRow{
 					Line:   sampleLine(csvReader, row),
+					Type:   result.invalidityType,
 					Row:    joined,
 					Reason: result.invalidityReason,
 				}
@@ -298,7 +300,7 @@ func verifyCorrection(
 		}
 		return "", verificationResult{
 			valid:            true,
-			invalidityType:   RowInvalidity(-1),
+			invalidityType:   UnknownInvalidity,
 			invalidityReason: "",
 		}
 	}
@@ -486,13 +488,13 @@ func verifyCorrection(
 
 		return strings.Join(lines, "\n"+indent), verificationResult{
 			valid:            true,
-			invalidityType:   RowInvalidity(-1),
+			invalidityType:   UnknownInvalidity,
 			invalidityReason: "",
 		}
 	}
 	return "", verificationResult{
 		valid:            true,
-		invalidityType:   RowInvalidity(-1),
+		invalidityType:   UnknownInvalidity,
 		invalidityReason: "",
 	}
 }
