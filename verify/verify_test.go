@@ -155,6 +155,8 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Type:   FewerFieldsThanExpected,
 						Fields: []string{"2a02:ecc0::/29", "US", "US-NJ", "Parsippany"},
 						Reason: "The row has 4 fields, but a geofeed row requires 5.",
+						Diagnostic: "expected 5 fields but got 4, " +
+							"row: '2a02:ecc0::/29,US,US-NJ,Parsippany'",
 					},
 				},
 			},
@@ -173,10 +175,11 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 				},
 				SampleInvalidRowDetails: map[RowInvalidity]InvalidRow{
 					EmptyNetwork: {
-						Line:   2,
-						Type:   EmptyNetwork,
-						Fields: []string{"", "", "", "", ""},
-						Reason: "The network field is empty.",
+						Line:       2,
+						Type:       EmptyNetwork,
+						Fields:     []string{"", "", "", "", ""},
+						Reason:     "The network field is empty.",
+						Diagnostic: "network field is empty, row: ',,,,'",
 					},
 				},
 			},
@@ -198,13 +201,16 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Line:   1,
 						Type:   UnableToParseNetwork,
 						Fields: []string{"2a02:/29", "", "", "", ""},
-						// Curated wording, unlike the SampleInvalidRows message
-						// above: it doesn't repeat the netip.ParsePrefix error
-						// text or the network field's value, so it isn't
-						// coupled to a specific Go version's exact wording of
-						// that error, and never quotes a value that parsing
-						// may have altered (e.g. a synthesized /32 or /64).
+						// Reason is curated, unlike Diagnostic and the
+						// SampleInvalidRows message below: it doesn't repeat
+						// the netip.ParsePrefix error text or the network
+						// field's value, so it isn't coupled to a specific Go
+						// version's exact wording of that error, and never
+						// quotes a value that parsing may have altered (e.g.
+						// a synthesized /32 or /64).
 						Reason: "The network field is not a valid IP address or CIDR.",
+						Diagnostic: `unable to parse network 2a02:/29: netip.ParsePrefix("2a02:/29"): ` +
+							`ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
 					},
 				},
 			},
@@ -234,6 +240,8 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Fields: []string{"2a02:ecc0::/29 ", "US", "NJ ", "Parsippany ", ""},
 						Reason: "The region code is not in ISO 3166-2 format (for example, US-CA). " +
 							"Enable lax mode to accept a region code without the country prefix.",
+						Diagnostic: "invalid ISO 3166-2 region code format in strict (default) mode, " +
+							"row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
 					},
 				},
 			},
@@ -396,6 +404,13 @@ func TestSampleInvalidRowDetailsReportsFileLine(t *testing.T) {
 		"line 2: expected 5 fields but got 4, row: '2.0.0.0/24,NL,NL-NH,Amsterdam'",
 		counts.SampleInvalidRows[FewerFieldsThanExpected],
 	)
+	// Diagnostic is the same legacy text with the "line %d: " prefix
+	// stripped -- String() supplies it instead.
+	assert.Equal(
+		t,
+		"expected 5 fields but got 4, row: '2.0.0.0/24,NL,NL-NH,Amsterdam'",
+		detail.Diagnostic,
+	)
 
 	// The two maps must never disagree about which row is the sample.
 	assert.Contains(
@@ -429,6 +444,7 @@ func TestSampleInvalidRowDetailsReportsFileLineForVerifyCorrection(t *testing.T)
 	assert.Equal(t, EmptyNetwork, detail.Type)
 	assert.Equal(t, []string{"", "", "", "", ""}, detail.Fields)
 	assert.Equal(t, 2, counts.Total)
+	assert.Equal(t, "network field is empty, row: ',,,,'", detail.Diagnostic)
 
 	// The two maps must never disagree about which row is the sample.
 	assert.Contains(t, counts.SampleInvalidRows[EmptyNetwork], strings.Join(detail.Fields, ","))

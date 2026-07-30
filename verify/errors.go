@@ -82,4 +82,8 @@ type InvalidRow struct {
 	// internal error text or library names. Its wording may change at any
 	// time: treat it as unstable diagnostic text, not something to parse.
 	Reason string
+	// Diagnostic is internal, engineer-facing text describing the failure.
+	// It is unstable, must not be parsed, and must not be shown to a
+	// geofeed's owner -- use Reason for that.
+	Diagnostic string
 }

@@ -139,25 +139,19 @@ func ProcessGeofeed(
 
 		if len(row) < expectedFieldsPerRecord {
 			if _, ok := c.SampleInvalidRows[FewerFieldsThanExpected]; !ok {
+				res := fewerFieldsResult(row, expectedFieldsPerRecord)
 				c.SampleInvalidRows[FewerFieldsThanExpected] = fmt.Sprintf(
-					"line %d: expected %d fields but got %d, row: '%s'",
+					"line %d: %s",
 					c.Total,
-					expectedFieldsPerRecord,
-					len(row),
-					strings.Join(row, ","),
+					res.diagnostic,
 				)
-				c.SampleInvalidRowDetails[FewerFieldsThanExpected] = InvalidRow{
-					Line: sampleLine(csvReader, row),
-					Type: FewerFieldsThanExpected,
+				c.SampleInvalidRowDetails[FewerFieldsThanExpected] = newInvalidRow(
+					sampleLine(csvReader, row),
 					// ReuseRecord means row's backing array is overwritten by
 					// the next Read; clone it so this sample survives.
-					Fields: slices.Clone(row),
-					Reason: fmt.Sprintf(
-						"The row has %d fields, but a geofeed row requires %d.",
-						len(row),
-						expectedFieldsPerRecord,
-					),
-				}
+					slices.Clone(row),
+					res,
+				)
 			}
 			c.Invalid++
 			continue
@@ -181,14 +175,13 @@ func ProcessGeofeed(
 				c.SampleInvalidRows[result.invalidityType] = fmt.Sprintf(
 					"line %d: %s",
 					c.Total,
-					result.invalidityReason,
+					result.diagnostic,
 				)
-				c.SampleInvalidRowDetails[result.invalidityType] = InvalidRow{
-					Line:   sampleLine(csvReader, row),
-					Type:   result.invalidityType,
-					Fields: fields,
-					Reason: result.curatedReason,
-				}
+				c.SampleInvalidRowDetails[result.invalidityType] = newInvalidRow(
+					sampleLine(csvReader, row),
+					fields,
+					result,
+				)
 			}
 			c.Invalid++
 			continue
@@ -243,26 +236,60 @@ const cityRecordUnavailableReason = "No geolocation data is available for this n
 type verificationResult struct {
 	valid          bool
 	invalidityType RowInvalidity
-	// invalidityReason is internal diagnostic text: it feeds
-	// SampleInvalidRows and may embed raw error text or the row itself.
-	invalidityReason string
-	// curatedReason is customer-facing wording for the same failure: it
-	// feeds InvalidRow.Reason instead of invalidityReason. It must be a
-	// fixed string per invalidity type -- never interpolating a row field
-	// or a value derived from one -- and must never surface an internal
-	// error or a library name.
-	curatedReason string
+	// diagnostic is internal, engineer-facing text: it feeds
+	// SampleInvalidRows (via a "line %d: " prefix) and InvalidRow.Diagnostic,
+	// and may embed raw error text or the row itself.
+	diagnostic string
+	// reason is customer-facing wording for the same failure: it feeds
+	// InvalidRow.Reason instead of diagnostic. It must be a fixed string
+	// per invalidity type -- never interpolating a row field or a value
+	// derived from one -- and must never surface an internal error or a
+	// library name.
+	reason string
+}
+
+// newInvalidRow builds the InvalidRow for a sample found on the given file
+// line, with the given fields, from a verificationResult describing why
+// it's invalid.
+func newInvalidRow(line int, fields []string, res verificationResult) InvalidRow {
+	return InvalidRow{
+		Line:       line,
+		Type:       res.invalidityType,
+		Fields:     fields,
+		Reason:     res.reason,
+		Diagnostic: res.diagnostic,
+	}
+}
+
+// fewerFieldsResult builds the verificationResult for a row with fewer
+// fields than expected.
+func fewerFieldsResult(row []string, expected int) verificationResult {
+	return verificationResult{
+		valid:          false,
+		invalidityType: FewerFieldsThanExpected,
+		diagnostic: fmt.Sprintf(
+			"expected %d fields but got %d, row: '%s'",
+			expected,
+			len(row),
+			strings.Join(row, ","),
+		),
+		reason: fmt.Sprintf(
+			"The row has %d fields, but a geofeed row requires %d.",
+			len(row),
+			expected,
+		),
+	}
 }
 
 func invalidRegionCodeResult(correction []string) verificationResult {
 	return verificationResult{
 		valid:          false,
 		invalidityType: InvalidRegionCode,
-		invalidityReason: fmt.Sprintf(
+		diagnostic: fmt.Sprintf(
 			"invalid ISO 3166-2 region code format in strict (default) mode, row: '%s'",
 			strings.Join(correction, ","),
 		),
-		curatedReason: "The region code is not in ISO 3166-2 format (for example, US-CA). " +
+		reason: "The region code is not in ISO 3166-2 format (for example, US-CA). " +
 			"Enable lax mode to accept a region code without the country prefix.",
 	}
 }
@@ -290,11 +317,11 @@ func verifyCorrection(
 		return "", verificationResult{
 			valid:          false,
 			invalidityType: EmptyNetwork,
-			invalidityReason: fmt.Sprintf(
+			diagnostic: fmt.Sprintf(
 				"network field is empty, row: '%s'",
 				strings.Join(correction, ","),
 			),
-			curatedReason: "The network field is empty.",
+			reason: "The network field is empty.",
 		}
 	}
 	if !(strings.Contains(networkOrIP, "/")) {
@@ -307,10 +334,10 @@ func verifyCorrection(
 	network, err := netip.ParsePrefix(networkOrIP)
 	if err != nil {
 		return "", verificationResult{
-			valid:            false,
-			invalidityType:   UnableToParseNetwork,
-			invalidityReason: fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
-			curatedReason:    "The network field is not a valid IP address or CIDR.",
+			valid:          false,
+			invalidityType: UnableToParseNetwork,
+			diagnostic:     fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
+			reason:         "The network field is not a valid IP address or CIDR.",
 		}
 	}
 
@@ -320,9 +347,9 @@ func verifyCorrection(
 			return "", invalidRegionCodeResult(correction)
 		}
 		return "", verificationResult{
-			valid:            true,
-			invalidityType:   UnknownInvalidity,
-			invalidityReason: "",
+			valid:          true,
+			invalidityType: UnknownInvalidity,
+			diagnostic:     "",
 		}
 	}
 
@@ -335,12 +362,12 @@ func verifyCorrection(
 		return "", verificationResult{
 			valid:          false,
 			invalidityType: UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf(
+			diagnostic: fmt.Sprintf(
 				"unable to find city record for %s: %s",
 				networkOrIP,
 				err,
 			),
-			curatedReason: cityRecordUnavailableReason,
+			reason: cityRecordUnavailableReason,
 		}
 	}
 
@@ -350,12 +377,12 @@ func verifyCorrection(
 		return "", verificationResult{
 			valid:          false,
 			invalidityType: UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf(
+			diagnostic: fmt.Sprintf(
 				"unable to find city record for %s: %s",
 				networkOrIP,
 				err,
 			),
-			curatedReason: cityRecordUnavailableReason,
+			reason: cityRecordUnavailableReason,
 		}
 	}
 
@@ -365,12 +392,12 @@ func verifyCorrection(
 		return "", verificationResult{
 			valid:          false,
 			invalidityType: UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf(
+			diagnostic: fmt.Sprintf(
 				"unable to find city record for %s: %s",
 				networkOrIP,
 				err,
 			),
-			curatedReason: cityRecordUnavailableReason,
+			reason: cityRecordUnavailableReason,
 		}
 	}
 
@@ -380,12 +407,12 @@ func verifyCorrection(
 		return "", verificationResult{
 			valid:          false,
 			invalidityType: UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf(
+			diagnostic: fmt.Sprintf(
 				"unable to find city record for %s: %s",
 				networkOrIP,
 				err,
 			),
-			curatedReason: cityRecordUnavailableReason,
+			reason: cityRecordUnavailableReason,
 		}
 	}
 
@@ -413,12 +440,12 @@ func verifyCorrection(
 			return "", verificationResult{
 				valid:          false,
 				invalidityType: UnableToFindISPRecord,
-				invalidityReason: fmt.Sprintf(
+				diagnostic: fmt.Sprintf(
 					"unable to find ISP record for %s: %s",
 					networkOrIP,
 					err,
 				),
-				curatedReason: "No ISP or autonomous system information is available for " +
+				reason: "No ISP or autonomous system information is available for " +
 					"this network in the current database.",
 			}
 		}
@@ -514,14 +541,14 @@ func verifyCorrection(
 		}
 
 		return strings.Join(lines, "\n"+indent), verificationResult{
-			valid:            true,
-			invalidityType:   UnknownInvalidity,
-			invalidityReason: "",
+			valid:          true,
+			invalidityType: UnknownInvalidity,
+			diagnostic:     "",
 		}
 	}
 	return "", verificationResult{
-		valid:            true,
-		invalidityType:   UnknownInvalidity,
-		invalidityReason: "",
+		valid:          true,
+		invalidityType: UnknownInvalidity,
+		diagnostic:     "",
 	}
 }
