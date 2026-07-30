@@ -247,9 +247,10 @@ type verificationResult struct {
 	// SampleInvalidRows and may embed raw error text or the row itself.
 	invalidityReason string
 	// curatedReason is customer-facing wording for the same failure: it
-	// feeds InvalidRow.Reason instead of invalidityReason, so that
-	// InvalidRow.Reason never repeats the row (InvalidRow.Fields already
-	// carries it) and never surfaces an internal error or a library name.
+	// feeds InvalidRow.Reason instead of invalidityReason. It must be a
+	// fixed string per invalidity type -- never interpolating a row field
+	// or a value derived from one -- and must never surface an internal
+	// error or a library name.
 	curatedReason string
 }
 
@@ -309,10 +310,7 @@ func verifyCorrection(
 			valid:            false,
 			invalidityType:   UnableToParseNetwork,
 			invalidityReason: fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
-			curatedReason: fmt.Sprintf(
-				"The network field %q is not a valid IP address or CIDR.",
-				networkOrIP,
-			),
+			curatedReason:    "The network field is not a valid IP address or CIDR.",
 		}
 	}
 

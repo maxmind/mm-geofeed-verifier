@@ -200,9 +200,11 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Fields: []string{"2a02:/29", "", "", "", ""},
 						// Curated wording, unlike the SampleInvalidRows message
 						// above: it doesn't repeat the netip.ParsePrefix error
-						// text, so it isn't coupled to a specific Go version's
-						// exact wording of that error.
-						Reason: `The network field "2a02:/29" is not a valid IP address or CIDR.`,
+						// text or the network field's value, so it isn't
+						// coupled to a specific Go version's exact wording of
+						// that error, and never quotes a value that parsing
+						// may have altered (e.g. a synthesized /32 or /64).
+						Reason: "The network field is not a valid IP address or CIDR.",
 					},
 				},
 			},

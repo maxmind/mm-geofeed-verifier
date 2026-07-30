@@ -75,9 +75,11 @@ type InvalidRow struct {
 	// containing a comma or a quote will re-split differently.
 	Fields []string
 	// Reason is curated, human-readable text describing why the row is
-	// invalid, suitable for display to the geofeed's owner. It does not
-	// include the row's fields (see Fields) or any internal error text or
-	// library names, and its wording may change at any time: treat it as
-	// unstable diagnostic text, not something to parse.
+	// invalid, suitable for display to the geofeed's owner. It is one of a
+	// small set of fixed messages per invalidity type: it never
+	// interpolates the row's fields (see Fields) or any value derived from
+	// them, such as a network address after parsing, and never contains
+	// internal error text or library names. Its wording may change at any
+	// time: treat it as unstable diagnostic text, not something to parse.
 	Reason string
 }
