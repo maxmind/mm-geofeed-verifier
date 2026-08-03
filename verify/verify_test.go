@@ -364,7 +364,7 @@ func TestSampleInvalidRowReportsFileLine(t *testing.T) {
 		"testdata/comments-then-short-row.csv",
 		"testdata/GeoIP2-City-Test.mmdb",
 		"",
-		Options{LaxMode: true, HideFilePathsInErrorMessages: true},
+		Options{},
 	)
 	require.ErrorIs(t, err, ErrInvalidGeofeed)
 
