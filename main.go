@@ -70,6 +70,12 @@ func run() error {
 				log.Print(line)
 			}
 		}
+		if errors.Is(err, verify.ErrDatabaseLookup) {
+			// Name the fault plainly: it's the MMDB, not the geofeed, so
+			// this must not read like "unable to process geofeed", which
+			// would tell someone their file is bad when it's our database.
+			return fmt.Errorf("MMDB unavailable while verifying %s: %w", conf.gf, err)
+		}
 		return fmt.Errorf("unable to process geofeed %s: %w", conf.gf, err)
 	}
 
