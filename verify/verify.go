@@ -480,7 +480,7 @@ func verifyCorrection(
 	}
 
 	// if no postal code is provided in the correction, do not report on any
-	// differences; postal codes are frequently omitted, and as of 2020-08-01 are
+	// differences; postal codes are frequently omitted, and as of 2020-08-01
 	// the postal code field is considered deprecated in RFC 8805
 	if correction[4] != "" && !(strings.EqualFold(correction[4], postalCode)) {
 		foundDiff = true
