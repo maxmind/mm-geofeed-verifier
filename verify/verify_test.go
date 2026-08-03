@@ -698,3 +698,47 @@ func TestProcessGeofeedISPAugmentation(t *testing.T) {
 	assert.Contains(t, diffLines[0], "AS Name: Telstra Pty Ltd")
 	assert.Contains(t, diffLines[0], "ISP Name: Telstra Internet")
 }
+
+// TestProcessGeofeedUnopenableCityDatabase covers the City MMDB
+// open-failure path. A database that can't be opened at all is the same
+// kind of MaxMind-side fault as a failed lookup, so ErrDatabaseLookup must
+// wrap this too, not just the two decode-failure sites.
+func TestProcessGeofeedUnopenableCityDatabase(t *testing.T) {
+	_, _, _, err := ProcessGeofeed(
+		"testdata/geofeed-valid.csv",
+		"testdata/does-not-exist.mmdb",
+		"",
+		Options{},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrDatabaseLookup)
+}
+
+// TestProcessGeofeedUnopenableISPDatabase covers the ISP MMDB open-failure
+// path specifically -- a different return site than the City one above,
+// so it needs its own proof that ErrDatabaseLookup wraps it too.
+func TestProcessGeofeedUnopenableISPDatabase(t *testing.T) {
+	_, _, _, err := ProcessGeofeed(
+		"testdata/geofeed-valid.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
+		"testdata/does-not-exist.mmdb",
+		Options{},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrDatabaseLookup)
+}
+
+// TestProcessGeofeedCorruptCityDatabase covers a database that exists but
+// isn't a valid MMDB at all, as opposed to simply missing -- a cheap
+// second trigger for the same open-failure path, reusing an existing
+// non-MMDB fixture rather than adding a new binary one.
+func TestProcessGeofeedCorruptCityDatabase(t *testing.T) {
+	_, _, _, err := ProcessGeofeed(
+		"testdata/geofeed-valid.csv",
+		"testdata/geofeed-valid.csv",
+		"",
+		Options{},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrDatabaseLookup)
+}

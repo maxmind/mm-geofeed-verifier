@@ -86,9 +86,18 @@ func ProcessGeofeed(
 		db, err = maxminddb.Open(filepath.Clean(mmdbFilename))
 		if err != nil {
 			if opts.HideFilePathsInErrorMessages {
-				return c, diffLines, nil, fmt.Errorf("unable to open MMDB: %w", err)
+				return c, diffLines, nil, fmt.Errorf(
+					"unable to open MMDB: %w: %w",
+					ErrDatabaseLookup,
+					err,
+				)
 			}
-			return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", mmdbFilename, err)
+			return c, diffLines, nil, fmt.Errorf(
+				"unable to open MMDB %s: %w: %w",
+				mmdbFilename,
+				ErrDatabaseLookup,
+				err,
+			)
 		}
 		defer db.Close()
 
@@ -96,11 +105,16 @@ func ProcessGeofeed(
 			ispdb, err = maxminddb.Open(filepath.Clean(ispFilename))
 			if err != nil {
 				if opts.HideFilePathsInErrorMessages {
-					return c, diffLines, nil, fmt.Errorf("unable to open ISP MMDB: %w", err)
+					return c, diffLines, nil, fmt.Errorf(
+						"unable to open ISP MMDB: %w: %w",
+						ErrDatabaseLookup,
+						err,
+					)
 				}
 				return c, diffLines, nil, fmt.Errorf(
-					"unable to open ISP MMDB %s: %w",
+					"unable to open ISP MMDB %s: %w: %w",
 					ispFilename,
+					ErrDatabaseLookup,
 					err,
 				)
 			}

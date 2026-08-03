@@ -17,8 +17,9 @@ var (
 	ErrInvalidGeofeed = errors.New("geofeed does not comply with the RFC 8805 standards")
 	// ErrEmptyGeofeed indicates a Geofeed with no records.
 	ErrEmptyGeofeed = errors.New("geofeed is empty")
-	// ErrDatabaseLookup indicates that an MMDB lookup failed. The geofeed was
-	// not evaluated, so a consumer must not change the feed's status on this
+	// ErrDatabaseLookup indicates a problem with an MMDB itself -- it could
+	// not be opened, or a lookup against it failed. The geofeed was not
+	// evaluated, so a consumer must not change the feed's status on this
 	// error -- it signals a problem with the database, not with the geofeed.
 	ErrDatabaseLookup = errors.New("mmdb lookup failed")
 )

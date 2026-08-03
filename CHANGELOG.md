@@ -12,10 +12,11 @@
   row's line in the file, counting comment lines, where the old string counted
   only data rows.
 - Breaking: `UnableToFindCityRecord` and `UnableToFindISPRecord` are removed. A
-  failed database lookup is a problem with the database, not with the geofeed,
-  so `ProcessGeofeed` now returns an error wrapping the new `ErrDatabaseLookup`
-  rather than recording the row as invalid. Consumers should treat it as
-  operational and leave the geofeed's state unchanged.
+  database that can't be opened, or a lookup against it that fails, is a problem
+  with the database, not with the geofeed, so `ProcessGeofeed` now returns an
+  error wrapping the new `ErrDatabaseLookup` rather than recording the row as
+  invalid. Consumers should treat it as operational and leave the geofeed's
+  state unchanged.
 - Breaking: the module path is now `github.com/maxmind/mm-geofeed-verifier/v5`.
   Update imports accordingly.
 
