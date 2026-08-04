@@ -32,6 +32,12 @@
   and `ErrInvalidGeofeed` are removed. A file that cannot be parsed as CSV,
   which previously produced an error carrying no sentinel at all and so was
   indistinguishable from an operational fault, is now `FailureUnreadableCSV`.
+- `Result.FailureDiagnostic` carries internal, engineer-facing text about
+  `Result.Failure`, in the same spirit as `InvalidRow.Diagnostic`: unstable, not
+  to be parsed, and not to be shown to a geofeed's owner. It reports where the
+  CSV parser gave up for a `FailureUnreadableCSV`, and is empty for the failure
+  reasons that have no particulars to add. It honors
+  `Options.HideFilePathsInErrorMessages`.
 - Breaking: lines holding only whitespace are skipped, as comment lines already
   are. Previously such a line parsed as a single empty field, counted toward
   `Result.Total`, and was reported as a `FewerFieldsThanExpected` invalid row

@@ -484,6 +484,7 @@ func TestProcessGeofeedWhitespaceOnlyFeedIsEmpty(t *testing.T) {
 	assert.Equal(t, 0, res.Total)
 	assert.Equal(t, 0, res.Invalid)
 	assert.Empty(t, res.SampleInvalidRows)
+	assert.Empty(t, res.FailureDiagnostic)
 }
 
 func TestIsBlank(t *testing.T) {
@@ -580,6 +581,9 @@ func TestProcessGeofeed_NonUTF8(t *testing.T) {
 			// trusted, so no rows are counted or sampled.
 			assert.Equal(t, 0, res.Total)
 			assert.Empty(t, res.SampleInvalidRows)
+			// FailureNotUTF8 says everything there is to say: there is no
+			// offset to report, so no diagnostic is manufactured.
+			assert.Empty(t, res.FailureDiagnostic)
 		})
 	}
 }
@@ -858,6 +862,40 @@ func TestProcessGeofeedUnreadableCSV(t *testing.T) {
 	// The offending line is not a row that failed validation -- it never
 	// parsed into a row at all -- so it must not appear as a sample.
 	assert.Empty(t, res.SampleInvalidRows)
+	// The whole diagnostic, not a substring: line 3, column 15 is where the
+	// stray character after the closing quote sits, and that position is the
+	// only record of where the trouble is, since no row was produced.
+	assert.Equal(
+		t,
+		`unable to read next row in testdata/malformed-quoting.csv: `+
+			`parse error on line 3, column 15: extraneous or missing " in quoted-field`,
+		res.FailureDiagnostic,
+	)
+}
+
+// TestProcessGeofeedUnreadableCSVHidingFilePaths proves
+// HideFilePathsInErrorMessages covers FailureDiagnostic too. The geofeed path
+// is a build-host path, and this diagnostic is persisted by consumers, so the
+// option would be pointless if the one populated diagnostic ignored it.
+func TestProcessGeofeedUnreadableCSVHidingFilePaths(t *testing.T) {
+	res, err := ProcessGeofeed(
+		"testdata/malformed-quoting.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
+		"",
+		Options{HideFilePathsInErrorMessages: true},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, FailureUnreadableCSV, res.Failure)
+	assert.Equal(
+		t,
+		`unable to read next row: `+
+			`parse error on line 3, column 15: extraneous or missing " in quoted-field`,
+		res.FailureDiagnostic,
+	)
+	// Named separately from the equality above: this is the property the
+	// option exists for, and it should fail loudly if the wording changes
+	// but the path creeps back in.
+	assert.NotContains(t, res.FailureDiagnostic, "testdata")
 }
 
 // TestResultZeroValueFailureIsNone guards against FailureReason's zero value

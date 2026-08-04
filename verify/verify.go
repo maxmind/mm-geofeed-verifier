@@ -38,6 +38,17 @@ type Result struct {
 	// Failure says why the geofeed failed verification, or is FailureNone if
 	// it passed.
 	Failure FailureReason
+	// FailureDiagnostic is internal, engineer-facing text about Failure --
+	// where the CSV parser stopped and why, for instance. Like
+	// InvalidRow.Diagnostic, it is unstable, must not be parsed, and must
+	// not be shown to a geofeed's owner: Failure is what a consumer maps to
+	// customer-facing wording.
+	//
+	// It is empty whenever the failure has no particulars to add beyond
+	// Failure itself, which includes every FailureReason except
+	// FailureUnreadableCSV. FailureTooManyInvalidRows describes itself
+	// through SampleInvalidRows instead.
+	FailureDiagnostic string
 }
 
 func newResult() Result {
@@ -200,8 +211,20 @@ func ProcessGeofeed(
 		if err != nil {
 			// Malformed CSV -- unbalanced quoting, say -- is the geofeed's
 			// fault, not ours, and the reader cannot resynchronize, so the
-			// counts gathered so far are all there will be.
+			// counts gathered so far are all there will be. The parser's own
+			// message names the line and column it gave up at, which is the
+			// only record of where the trouble is: no row was produced, so
+			// nothing lands in SampleInvalidRows.
 			c.Failure = FailureUnreadableCSV
+			if opts.HideFilePathsInErrorMessages {
+				c.FailureDiagnostic = fmt.Sprintf("unable to read next row: %s", err)
+			} else {
+				c.FailureDiagnostic = fmt.Sprintf(
+					"unable to read next row in %s: %s",
+					geofeedFilename,
+					err,
+				)
+			}
 			return c, nil
 		}
 
