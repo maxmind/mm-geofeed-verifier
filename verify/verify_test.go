@@ -170,7 +170,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					},
 				},
 				ASNCounts: map[uint]int{},
-				Failure:   FailureTooManyInvalidRows,
+				Failure:   FailureInvalidRows,
 			},
 			laxMode: false,
 		},
@@ -191,7 +191,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					},
 				},
 				ASNCounts: map[uint]int{},
-				Failure:   FailureTooManyInvalidRows,
+				Failure:   FailureInvalidRows,
 			},
 			laxMode: false,
 		},
@@ -219,7 +219,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					},
 				},
 				ASNCounts: map[uint]int{},
-				Failure:   FailureTooManyInvalidRows,
+				Failure:   FailureInvalidRows,
 			},
 			laxMode: false,
 		},
@@ -247,7 +247,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 					},
 				},
 				ASNCounts: map[uint]int{},
-				Failure:   FailureTooManyInvalidRows,
+				Failure:   FailureInvalidRows,
 			},
 			laxMode: false,
 		},
@@ -310,7 +310,7 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 			Options{},
 		)
 		require.NoError(t, err)
-		assert.Equal(t, FailureTooManyInvalidRows, res.Failure)
+		assert.Equal(t, FailureInvalidRows, res.Failure)
 		assert.Contains(
 			t,
 			res.SampleInvalidRows,
@@ -327,7 +327,7 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 			Options{LaxMode: false},
 		)
 		require.NoError(t, err)
-		assert.Equal(t, FailureTooManyInvalidRows, res.Failure)
+		assert.Equal(t, FailureInvalidRows, res.Failure)
 		assert.Contains(
 			t,
 			res.SampleInvalidRows,
@@ -392,7 +392,7 @@ func TestSampleInvalidRowReportsFileLine(t *testing.T) {
 		Options{},
 	)
 	require.NoError(t, err)
-	require.Equal(t, FailureTooManyInvalidRows, res.Failure)
+	require.Equal(t, FailureInvalidRows, res.Failure)
 
 	detail, ok := res.SampleInvalidRows[FewerFieldsThanExpected]
 	require.True(t, ok, "expected a sample for FewerFieldsThanExpected")
@@ -424,7 +424,7 @@ func TestSampleInvalidRowReportsFileLineForVerifyCorrection(t *testing.T) {
 		Options{},
 	)
 	require.NoError(t, err)
-	require.Equal(t, FailureTooManyInvalidRows, res.Failure)
+	require.Equal(t, FailureInvalidRows, res.Failure)
 
 	detail, ok := res.SampleInvalidRows[EmptyNetwork]
 	require.True(t, ok, "expected a sample for EmptyNetwork")
@@ -452,7 +452,7 @@ func TestProcessGeofeedSkipsWhitespaceOnlyLines(t *testing.T) {
 		Options{},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, FailureTooManyInvalidRows, res.Failure)
+	assert.Equal(t, FailureInvalidRows, res.Failure)
 	// The whitespace on file lines 3 and 4 is not two more rows: only the
 	// two data rows count, and only the short one is invalid.
 	assert.Equal(t, 2, res.Total)
@@ -527,7 +527,7 @@ func TestSampleInvalidRowFieldsSurviveReuseRecord(t *testing.T) {
 			Options{},
 		)
 		require.NoError(t, err)
-		require.Equal(t, FailureTooManyInvalidRows, res.Failure)
+		require.Equal(t, FailureInvalidRows, res.Failure)
 
 		detail, ok := res.SampleInvalidRows[EmptyNetwork]
 		require.True(t, ok, "expected a sample detail for EmptyNetwork")
@@ -543,7 +543,7 @@ func TestSampleInvalidRowFieldsSurviveReuseRecord(t *testing.T) {
 			Options{},
 		)
 		require.NoError(t, err)
-		require.Equal(t, FailureTooManyInvalidRows, res.Failure)
+		require.Equal(t, FailureInvalidRows, res.Failure)
 
 		detail, ok := res.SampleInvalidRows[FewerFieldsThanExpected]
 		require.True(t, ok, "expected a sample detail for FewerFieldsThanExpected")
@@ -614,7 +614,7 @@ func TestInvalidRowsHaveDiagnostic(t *testing.T) {
 				Options{},
 			)
 			require.NoError(t, err)
-			require.Equal(t, FailureTooManyInvalidRows, res.Failure)
+			require.Equal(t, FailureInvalidRows, res.Failure)
 			require.NotEmpty(t, res.SampleInvalidRows, "expected at least one sample")
 
 			for invType, detail := range res.SampleInvalidRows {
@@ -915,7 +915,7 @@ func TestFailureReasonString(t *testing.T) {
 		{FailureNone, "FailureNone"},
 		{FailureNotUTF8, "FailureNotUTF8"},
 		{FailureEmpty, "FailureEmpty"},
-		{FailureTooManyInvalidRows, "FailureTooManyInvalidRows"},
+		{FailureInvalidRows, "FailureInvalidRows"},
 		{FailureUnreadableCSV, "FailureUnreadableCSV"},
 		{FailureReason(99), "UnknownFailureReason"},
 	}

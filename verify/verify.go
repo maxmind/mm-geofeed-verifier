@@ -46,7 +46,7 @@ type Result struct {
 	//
 	// It is empty whenever the failure has no particulars to add beyond
 	// Failure itself, which includes every FailureReason except
-	// FailureUnreadableCSV. FailureTooManyInvalidRows describes itself
+	// FailureUnreadableCSV. FailureInvalidRows describes itself
 	// through SampleInvalidRows instead.
 	FailureDiagnostic string
 }
@@ -78,11 +78,13 @@ const (
 	// FailureEmpty indicates a geofeed with no records. It is only reported
 	// when Options.EmptyOK is false.
 	FailureEmpty
-	// FailureTooManyInvalidRows indicates incomplete compliance with the RFC
-	// 8805 standards and the mode in which the verifier ran: at least one
-	// row failed validation. Result.SampleInvalidRows holds one example per
-	// kind of invalidity found.
-	FailureTooManyInvalidRows
+	// FailureInvalidRows indicates incomplete compliance with the RFC 8805
+	// standards and the mode in which the verifier ran: at least one row
+	// failed validation. There is no threshold -- one bad row is enough, so
+	// this cannot support a policy that tolerates a few of them.
+	// Result.SampleInvalidRows holds one example per kind of invalidity
+	// found.
+	FailureInvalidRows
 	// FailureUnreadableCSV indicates that the file could not be parsed as
 	// CSV at all -- malformed quoting, for example. Parsing stops at the
 	// offending line, so the row counts cover only the rows ahead of it.
@@ -98,8 +100,8 @@ func (fr FailureReason) String() string {
 		return "FailureNotUTF8"
 	case FailureEmpty:
 		return "FailureEmpty"
-	case FailureTooManyInvalidRows:
-		return "FailureTooManyInvalidRows"
+	case FailureInvalidRows:
+		return "FailureInvalidRows"
 	case FailureUnreadableCSV:
 		return "FailureUnreadableCSV"
 	default:
@@ -292,7 +294,7 @@ func ProcessGeofeed(
 	}
 
 	if c.Invalid > 0 || len(c.SampleInvalidRows) > 0 {
-		c.Failure = FailureTooManyInvalidRows
+		c.Failure = FailureInvalidRows
 		return c, nil
 	}
 

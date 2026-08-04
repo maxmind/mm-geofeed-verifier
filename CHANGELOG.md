@@ -25,8 +25,8 @@
   removed; `ProcessGeofeed` is the only thing that builds a `Result`.
 - Breaking: a geofeed that fails verification is no longer reported as an error.
   `Result.Failure` names the reason -- `FailureNotUTF8`, `FailureEmpty`,
-  `FailureTooManyInvalidRows` or `FailureUnreadableCSV` -- and is `FailureNone`
-  when the geofeed passed. `ProcessGeofeed` returns a non-nil error only when
+  `FailureInvalidRows` or `FailureUnreadableCSV` -- and is `FailureNone` when
+  the geofeed passed. `ProcessGeofeed` returns a non-nil error only when
   verification could not be performed at all: the file was unreadable, or an
   MMDB was unusable (`ErrDatabaseLookup`). So `ErrNotUTF8`, `ErrEmptyGeofeed`
   and `ErrInvalidGeofeed` are removed. A file that cannot be parsed as CSV,

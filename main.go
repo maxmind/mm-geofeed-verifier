@@ -70,7 +70,7 @@ func run() error {
 	}
 
 	if res.Failure != verify.FailureNone {
-		if res.Failure == verify.FailureTooManyInvalidRows {
+		if res.Failure == verify.FailureInvalidRows {
 			log.Printf(
 				"Found %d invalid rows out of %d rows in total, examples by type:",
 				res.Invalid,
