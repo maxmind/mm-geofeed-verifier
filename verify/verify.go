@@ -205,6 +205,10 @@ func ProcessGeofeed(
 			return c, nil
 		}
 
+		if isBlank(row) {
+			continue
+		}
+
 		c.Total++
 
 		if len(row) < expectedFieldsPerRecord {
@@ -270,6 +274,15 @@ func ProcessGeofeed(
 	}
 
 	return c, nil
+}
+
+// isBlank reports whether row carries no data at all. csv.Reader skips a
+// genuinely empty line by itself, but a line holding only spaces or tabs
+// parses as a single empty field, which would otherwise be counted as a row
+// and reported as one with too few fields -- a sample row with nothing in it
+// for a line the feed's author intended as blank.
+func isBlank(row []string) bool {
+	return len(row) == 0 || (len(row) == 1 && strings.TrimSpace(row[0]) == "")
 }
 
 // sampleLine returns the geofeed file line of row via csvReader's FieldPos.

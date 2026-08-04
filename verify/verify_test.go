@@ -439,6 +439,76 @@ func TestSampleInvalidRowReportsFileLineForVerifyCorrection(t *testing.T) {
 	assert.Equal(t, "network field is empty, row: ',,,,'", detail.Diagnostic)
 }
 
+// TestProcessGeofeedSkipsWhitespaceOnlyLines proves a line holding only
+// spaces or tabs is skipped the way a comment line is, rather than counted as
+// a row and reported as one with too few fields. It also pins the physical
+// line of the row that genuinely is invalid: skipping records must not shift
+// the lines reported for the rows that are kept.
+func TestProcessGeofeedSkipsWhitespaceOnlyLines(t *testing.T) {
+	res, err := ProcessGeofeed(
+		"testdata/whitespace-then-short-row.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
+		"",
+		Options{},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, FailureTooManyInvalidRows, res.Failure)
+	// The whitespace on file lines 3 and 4 is not two more rows: only the
+	// two data rows count, and only the short one is invalid.
+	assert.Equal(t, 2, res.Total)
+	assert.Equal(t, 1, res.Invalid)
+
+	require.Len(t, res.SampleInvalidRows, 1)
+	detail, ok := res.SampleInvalidRows[FewerFieldsThanExpected]
+	require.True(t, ok, "expected a sample for FewerFieldsThanExpected")
+	// Line 5 is the short row's physical line, counting the comment and the
+	// two whitespace lines above it. Were the whitespace reported rather than
+	// skipped, this sample would instead be the empty one-field record on
+	// line 3.
+	assert.Equal(t, 5, detail.Line)
+	assert.Equal(t, []string{"2.0.0.0/24", "NL", "NL-NH", "Amsterdam"}, detail.Fields)
+}
+
+// TestProcessGeofeedWhitespaceOnlyFeedIsEmpty covers a feed holding nothing
+// but comment and whitespace lines. Skipped records must not count toward
+// Total, so this feed is empty rather than a feed full of invalid rows.
+func TestProcessGeofeedWhitespaceOnlyFeedIsEmpty(t *testing.T) {
+	res, err := ProcessGeofeed(
+		"testdata/whitespace-only.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
+		"",
+		Options{},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, FailureEmpty, res.Failure)
+	assert.Equal(t, 0, res.Total)
+	assert.Equal(t, 0, res.Invalid)
+	assert.Empty(t, res.SampleInvalidRows)
+}
+
+func TestIsBlank(t *testing.T) {
+	tests := []struct {
+		name string
+		row  []string
+		want bool
+	}{
+		{"no fields", nil, true},
+		{"one empty field", []string{""}, true},
+		{"one whitespace field", []string{" \t "}, true},
+		{"one field with content", []string{"1.0.0.0/24"}, false},
+		// A lone comma parses as two empty fields. The author did write a
+		// row there, just an unusable one, so it stays an invalid row rather
+		// than being treated as a blank line.
+		{"two empty fields", []string{"", ""}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isBlank(tt.row))
+		})
+	}
+}
+
 // TestSampleInvalidRowFieldsSurviveReuseRecord guards against Fields
 // aliasing csv.Reader's reused backing array, at both population sites. Each
 // fixture has three same-type invalid rows with distinct field values; only
