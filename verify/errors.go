@@ -5,24 +5,11 @@ import (
 	"fmt"
 )
 
-var (
-	// ErrNotUTF8 indicates a file encoding that is not valid UTF-8 (with
-	// optional BOM). RFC 8805 says that "feeds MUST use UTF-8 character
-	// encoding". This is a separate error from ErrInvalidGeofeed, because we
-	// can't confidently read anything from the file if it's not UTF-8.
-	ErrNotUTF8 = errors.New("geofeed is not valid UTF-8")
-	// ErrInvalidGeofeed represents error that is returned in case of incomplete
-	// compliance with RFC 8805 standards and the mode in which the program is
-	// run.
-	ErrInvalidGeofeed = errors.New("geofeed does not comply with the RFC 8805 standards")
-	// ErrEmptyGeofeed indicates a Geofeed with no records.
-	ErrEmptyGeofeed = errors.New("geofeed is empty")
-	// ErrDatabaseLookup indicates a problem with an MMDB itself -- it could
-	// not be opened, or a lookup against it failed. The geofeed was not
-	// evaluated, so a consumer must not change the feed's status on this
-	// error -- it signals a problem with the database, not with the geofeed.
-	ErrDatabaseLookup = errors.New("mmdb lookup failed")
-)
+// ErrDatabaseLookup indicates a problem with an MMDB itself -- it could not
+// be opened, or a lookup against it failed. The geofeed was not evaluated, so
+// a consumer must not change the feed's status on this error -- it signals a
+// problem with the database, not with the geofeed.
+var ErrDatabaseLookup = errors.New("mmdb lookup failed")
 
 // RowInvalidity represents type of row invalidity.
 type RowInvalidity int

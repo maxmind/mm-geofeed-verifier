@@ -19,6 +19,19 @@
   state unchanged.
 - Breaking: the module path is now `github.com/maxmind/mm-geofeed-verifier/v5`.
   Update imports accordingly.
+- Breaking: `ProcessGeofeed` returns `(Result, error)`. `Result` replaces
+  `CheckResult` and absorbs the diff lines and ASN counts that used to be
+  separate return values, as `Diffs` and `ASNCounts`. `NewCheckResult` is
+  removed; `ProcessGeofeed` is the only thing that builds a `Result`.
+- Breaking: a geofeed that fails verification is no longer reported as an error.
+  `Result.Failure` names the reason -- `FailureNotUTF8`, `FailureEmpty`,
+  `FailureTooManyInvalidRows` or `FailureUnreadableCSV` -- and is `FailureNone`
+  when the geofeed passed. `ProcessGeofeed` returns a non-nil error only when
+  verification could not be performed at all: the file was unreadable, or an
+  MMDB was unusable (`ErrDatabaseLookup`). So `ErrNotUTF8`, `ErrEmptyGeofeed`
+  and `ErrInvalidGeofeed` are removed. A file that cannot be parsed as CSV,
+  which previously produced an error carrying no sentinel at all and so was
+  indistinguishable from an operational fault, is now `FailureUnreadableCSV`.
 
 ## 4.0.0 (2026-02-16)
 

@@ -53,23 +53,13 @@ func run() error {
 		fmt.Fprintln(os.Stderr, "-isp is ignored without -db")
 	}
 
-	c, diffLines, asnCounts, err := verify.ProcessGeofeed(
+	res, err := verify.ProcessGeofeed(
 		conf.gf,
 		conf.db,
 		conf.isp,
 		verify.Options{LaxMode: conf.laxMode, EmptyOK: conf.emptyOK},
 	)
 	if err != nil {
-		if errors.Is(err, verify.ErrInvalidGeofeed) {
-			log.Printf(
-				"Found %d invalid rows out of %d rows in total, examples by type:",
-				c.Invalid,
-				c.Total,
-			)
-			for _, line := range formatInvalidRows(c.SampleInvalidRows) {
-				log.Print(line)
-			}
-		}
 		if errors.Is(err, verify.ErrDatabaseLookup) {
 			// Name the fault plainly: it's the MMDB, not the geofeed, so
 			// this must not read like "unable to process geofeed", which
@@ -79,34 +69,48 @@ func run() error {
 		return fmt.Errorf("unable to process geofeed %s: %w", conf.gf, err)
 	}
 
+	if res.Failure != verify.FailureNone {
+		if res.Failure == verify.FailureTooManyInvalidRows {
+			log.Printf(
+				"Found %d invalid rows out of %d rows in total, examples by type:",
+				res.Invalid,
+				res.Total,
+			)
+			for _, line := range formatInvalidRows(res.SampleInvalidRows) {
+				log.Print(line)
+			}
+		}
+		return fmt.Errorf("geofeed %s failed verification: %s", conf.gf, res.Failure)
+	}
+
 	if conf.db == "" {
 		fmt.Printf(
 			"Validated %d rows. No MMDB provided (-db), so comparison was skipped.\n",
-			c.Total,
+			res.Total,
 		)
 		return nil
 	}
 
 	fmt.Printf(
-		strings.Join(diffLines, "\n\n")+
+		strings.Join(res.Diffs, "\n\n")+
 			"\n\nOut of %d potential corrections, %d may be different than our current mappings\n\n",
-		c.Total,
-		c.Differences,
+		res.Total,
+		res.Differences,
 	)
 
 	// https://stackoverflow.com/questions/18695346/how-can-i-sort-a-mapstringint-by-its-values/56706305#56706305
-	asNumbers := make([]uint, 0, len(asnCounts))
-	for asNumber := range asnCounts {
+	asNumbers := make([]uint, 0, len(res.ASNCounts))
+	for asNumber := range res.ASNCounts {
 		asNumbers = append(asNumbers, asNumber)
 	}
 	slices.SortFunc(
 		asNumbers,
 		func(a, b uint) int {
-			return cmp.Compare(asnCounts[b], asnCounts[a])
+			return cmp.Compare(res.ASNCounts[b], res.ASNCounts[a])
 		},
 	)
 	for _, asNumber := range asNumbers {
-		fmt.Printf("ASN: %d, count: %d\n", asNumber, asnCounts[asNumber])
+		fmt.Printf("ASN: %d, count: %d\n", asNumber, res.ASNCounts[asNumber])
 	}
 
 	return nil

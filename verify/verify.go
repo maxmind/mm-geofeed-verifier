@@ -18,26 +18,81 @@ import (
 	"github.com/oschwald/maxminddb-golang/v2"
 )
 
-// CheckResult holds the total number of rows for a geofeed file,
-// the number of rows that differ from expected mmdb values as well
-// as information about the rows that failed validation.
-// To create new CheckResult instance use NewCheckResult() func.
-type CheckResult struct {
+// Result holds the outcome of verifying a geofeed file: the total number of
+// rows, the number of rows that differ from the expected MMDB values,
+// information about the rows that failed validation, and -- if the geofeed
+// failed verification as a whole -- why.
+type Result struct {
 	Total       int
 	Differences int
 	Invalid     int
 	// SampleInvalidRows holds one sample InvalidRow per RowInvalidity kind
 	// encountered, keyed by kind.
 	SampleInvalidRows map[RowInvalidity]InvalidRow
+	// Diffs holds engineer-facing text describing each row whose MMDB
+	// record differs from what the geofeed claims, one entry per row.
+	Diffs []string
+	// ASNCounts counts how many rows resolved to each autonomous system
+	// number. It stays empty unless an ISP database was provided.
+	ASNCounts map[uint]int
+	// Failure says why the geofeed failed verification, or is FailureNone if
+	// it passed.
+	Failure FailureReason
 }
 
-// NewCheckResult returns new CheckResult instance.
-func NewCheckResult() CheckResult {
-	return CheckResult{
-		Total:             0,
-		Differences:       0,
-		Invalid:           0,
+func newResult() Result {
+	return Result{
 		SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+		ASNCounts:         map[uint]int{},
+	}
+}
+
+// FailureReason identifies why a geofeed failed verification. It is a
+// verdict on the geofeed's contents rather than a fault of the verifier, so
+// ProcessGeofeed reports it as a value on Result and not as an error: a
+// caller that treats every non-nil error as fatal must not abort a run
+// because one geofeed is malformed.
+type FailureReason int
+
+// Verification failure reasons.
+const (
+	// FailureNone is the zero value of FailureReason: the geofeed passed
+	// verification.
+	FailureNone FailureReason = iota
+	// FailureNotUTF8 indicates a file encoding that is not valid UTF-8
+	// (with an optional BOM). RFC 8805 says that "feeds MUST use UTF-8
+	// character encoding", and nothing in the file can be read confidently
+	// without it, so no rows are examined.
+	FailureNotUTF8
+	// FailureEmpty indicates a geofeed with no records. It is only reported
+	// when Options.EmptyOK is false.
+	FailureEmpty
+	// FailureTooManyInvalidRows indicates incomplete compliance with the RFC
+	// 8805 standards and the mode in which the verifier ran: at least one
+	// row failed validation. Result.SampleInvalidRows holds one example per
+	// kind of invalidity found.
+	FailureTooManyInvalidRows
+	// FailureUnreadableCSV indicates that the file could not be parsed as
+	// CSV at all -- malformed quoting, for example. Parsing stops at the
+	// offending line, so the row counts cover only the rows ahead of it.
+	FailureUnreadableCSV
+)
+
+// String implements the Stringer interface.
+func (fr FailureReason) String() string {
+	switch fr {
+	case FailureNone:
+		return "FailureNone"
+	case FailureNotUTF8:
+		return "FailureNotUTF8"
+	case FailureEmpty:
+		return "FailureEmpty"
+	case FailureTooManyInvalidRows:
+		return "FailureTooManyInvalidRows"
+	case FailureUnreadableCSV:
+		return "FailureUnreadableCSV"
+	default:
+		return "UnknownFailureReason"
 	}
 }
 
@@ -56,29 +111,36 @@ type Options struct {
 	EmptyOK bool
 }
 
-// ProcessGeofeed attempts to validate a given geofeedFilename.
+// ProcessGeofeed verifies the geofeed in geofeedFilename, comparing each row
+// against mmdbFilename (augmented by ispFilename, if given) when an MMDB is
+// provided and checking the row's format only when it is not.
+//
+// It returns a non-nil error only when verification could not be performed at
+// all -- the file was unreadable, or an MMDB was unusable (see
+// ErrDatabaseLookup). A geofeed that fails verification is not an error; it
+// is a Result whose Failure says why.
 func ProcessGeofeed(
 	geofeedFilename,
 	mmdbFilename,
 	ispFilename string,
 	opts Options,
-) (CheckResult, []string, map[uint]int, error) {
-	c := NewCheckResult()
-	var diffLines []string
+) (Result, error) {
+	c := newResult()
 
 	geofeedData, err := os.ReadFile(filepath.Clean(geofeedFilename))
 	if err != nil {
 		if opts.HideFilePathsInErrorMessages {
-			return c, diffLines, nil, fmt.Errorf("unable to open file: %w", err)
+			return c, fmt.Errorf("unable to open file: %w", err)
 		}
-		return c, diffLines, nil, fmt.Errorf("unable to open %s: %w", geofeedFilename, err)
+		return c, fmt.Errorf("unable to open %s: %w", geofeedFilename, err)
 	}
 
 	// Strip UTF-8 BOM if present (common on files from Windows).
 	geofeedData = bytes.TrimPrefix(geofeedData, []byte{0xEF, 0xBB, 0xBF})
 
 	if !utf8.Valid(geofeedData) {
-		return c, diffLines, nil, ErrNotUTF8
+		c.Failure = FailureNotUTF8
+		return c, nil
 	}
 
 	var db, ispdb *maxminddb.Reader
@@ -86,13 +148,13 @@ func ProcessGeofeed(
 		db, err = maxminddb.Open(filepath.Clean(mmdbFilename))
 		if err != nil {
 			if opts.HideFilePathsInErrorMessages {
-				return c, diffLines, nil, fmt.Errorf(
+				return c, fmt.Errorf(
 					"unable to open MMDB: %w: %w",
 					ErrDatabaseLookup,
 					err,
 				)
 			}
-			return c, diffLines, nil, fmt.Errorf(
+			return c, fmt.Errorf(
 				"unable to open MMDB %s: %w: %w",
 				mmdbFilename,
 				ErrDatabaseLookup,
@@ -105,13 +167,13 @@ func ProcessGeofeed(
 			ispdb, err = maxminddb.Open(filepath.Clean(ispFilename))
 			if err != nil {
 				if opts.HideFilePathsInErrorMessages {
-					return c, diffLines, nil, fmt.Errorf(
+					return c, fmt.Errorf(
 						"unable to open ISP MMDB: %w: %w",
 						ErrDatabaseLookup,
 						err,
 					)
 				}
-				return c, diffLines, nil, fmt.Errorf(
+				return c, fmt.Errorf(
 					"unable to open ISP MMDB %s: %w: %w",
 					ispFilename,
 					ErrDatabaseLookup,
@@ -121,7 +183,6 @@ func ProcessGeofeed(
 			defer ispdb.Close()
 		}
 	}
-	asnCounts := map[uint]int{}
 
 	csvReader := csv.NewReader(bytes.NewReader(geofeedData))
 	csvReader.ReuseRecord = true
@@ -137,14 +198,11 @@ func ProcessGeofeed(
 			break
 		}
 		if err != nil {
-			if opts.HideFilePathsInErrorMessages {
-				return c, diffLines, asnCounts, fmt.Errorf("unable to read next row: %w", err)
-			}
-			return c, diffLines, asnCounts, fmt.Errorf(
-				"unable to read next row in %s: %w",
-				geofeedFilename,
-				err,
-			)
+			// Malformed CSV -- unbalanced quoting, say -- is the geofeed's
+			// fault, not ours, and the reader cannot resynchronize, so the
+			// counts gathered so far are all there will be.
+			c.Failure = FailureUnreadableCSV
+			return c, nil
 		}
 
 		c.Total++
@@ -173,7 +231,7 @@ func ProcessGeofeed(
 			correction,
 			db,
 			ispdb,
-			asnCounts,
+			c.ASNCounts,
 			opts,
 		)
 		if err != nil {
@@ -181,7 +239,7 @@ func ProcessGeofeed(
 			// this row is invalid: the row was never evaluated, so it must
 			// not be recorded as a sample invalid row, and processing
 			// cannot usefully continue for the rows after it either.
-			return c, diffLines, asnCounts, err
+			return c, err
 		}
 		if !result.valid {
 			if _, ok := c.SampleInvalidRows[result.invalidityType]; !ok {
@@ -196,30 +254,22 @@ func ProcessGeofeed(
 		}
 
 		if diffLine != "" {
-			diffLines = append(diffLines, diffLine)
+			c.Diffs = append(c.Diffs, diffLine)
 			c.Differences++
 		}
 	}
-	if err != nil && !errors.Is(err, io.EOF) {
-		if opts.HideFilePathsInErrorMessages {
-			return c, diffLines, asnCounts, fmt.Errorf("error reading file: %w", err)
-		}
-		return c, diffLines, asnCounts, fmt.Errorf(
-			"error while reading %s: %w",
-			geofeedFilename,
-			err,
-		)
-	}
 
 	if c.Total == 0 && !opts.EmptyOK {
-		return c, diffLines, asnCounts, ErrEmptyGeofeed
+		c.Failure = FailureEmpty
+		return c, nil
 	}
 
 	if c.Invalid > 0 || len(c.SampleInvalidRows) > 0 {
-		return c, diffLines, asnCounts, ErrInvalidGeofeed
+		c.Failure = FailureTooManyInvalidRows
+		return c, nil
 	}
 
-	return c, diffLines, asnCounts, nil
+	return c, nil
 }
 
 // sampleLine returns the geofeed file line of row via csvReader's FieldPos.

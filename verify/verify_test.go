@@ -13,10 +13,18 @@ type processGeofeedTest struct {
 	gf      string
 	db      string
 	dl      []string
-	c       CheckResult
-	em      error
+	c       Result
 	laxMode bool
 	emptyOK bool
+}
+
+// withoutDiffs returns res with Diffs cleared. Table cases pin the counts
+// and the sample invalid rows exactly, but not the diff text: spelling out
+// the full difference explanations is tedious and brittle, so the cases that
+// care about them assert substrings separately.
+func withoutDiffs(res Result) Result {
+	res.Diffs = nil
+	return res
 }
 
 func TestProcessGeofeed_Valid(t *testing.T) {
@@ -28,10 +36,11 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
-			c: CheckResult{
+			c: Result{
 				Total:             3,
 				Differences:       2,
 				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+				ASNCounts:         map[uint]int{},
 			},
 			laxMode: false,
 		},
@@ -42,10 +51,11 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
-			c: CheckResult{
+			c: Result{
 				Total:             3,
 				Differences:       2,
 				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+				ASNCounts:         map[uint]int{},
 			},
 			laxMode: true,
 		},
@@ -56,10 +66,11 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
-			c: CheckResult{
+			c: Result{
 				Total:             3,
 				Differences:       2,
 				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+				ASNCounts:         map[uint]int{},
 			},
 			laxMode: true,
 		},
@@ -70,10 +81,11 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
-			c: CheckResult{
+			c: Result{
 				Total:             3,
 				Differences:       2,
 				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+				ASNCounts:         map[uint]int{},
 			},
 			laxMode: false,
 		},
@@ -84,19 +96,21 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				"Found a potential improvement: '2a02:ecc0::/29",
 				"current postal code: '34021'\t\tsuggested postal code: '1060'",
 			},
-			c: CheckResult{
+			c: Result{
 				Total:             3,
 				Differences:       2,
 				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+				ASNCounts:         map[uint]int{},
 			},
 			laxMode: false,
 		},
 		{
 			gf: "testdata/empty.csv",
 			db: "testdata/GeoIP2-City-Test.mmdb",
-			c: CheckResult{
+			c: Result{
 				Total:             0,
 				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+				ASNCounts:         map[uint]int{},
 			},
 			emptyOK: true,
 		},
@@ -107,7 +121,7 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 	for _, test := range goodTests {
 		t.Run(
 			test.gf+" "+test.db, func(t *testing.T) {
-				c, dl, _, err := ProcessGeofeed(
+				res, err := ProcessGeofeed(
 					test.gf,
 					test.db,
 					"",
@@ -120,12 +134,17 @@ func TestProcessGeofeed_Valid(t *testing.T) {
 				for i, s := range test.dl {
 					assert.Contains(
 						t,
-						dl[i],
+						res.Diffs[i],
 						s,
 						"got expected substring: '%s', substring",
 					)
 				}
-				assert.Equal(t, test.c, c, "processGeofeed returned expected results")
+				assert.Equal(
+					t,
+					test.c,
+					withoutDiffs(res),
+					"processGeofeed returned expected results",
+				)
 			},
 		)
 	}
@@ -136,7 +155,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 		{
 			gf: "testdata/geofeed-invalid-missing-fields.csv",
 			db: "testdata/GeoIP2-City-Test.mmdb",
-			c: CheckResult{
+			c: Result{
 				Total:       2,
 				Differences: 0,
 				Invalid:     2,
@@ -150,14 +169,15 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 							"row: '2a02:ecc0::/29,US,US-NJ,Parsippany'",
 					},
 				},
+				ASNCounts: map[uint]int{},
+				Failure:   FailureTooManyInvalidRows,
 			},
-			em:      ErrInvalidGeofeed,
 			laxMode: false,
 		},
 		{
 			gf: "testdata/geofeed-invalid-empty-network.csv",
 			db: "testdata/GeoIP2-City-Test.mmdb",
-			c: CheckResult{
+			c: Result{
 				Total:       2,
 				Differences: 1,
 				Invalid:     1,
@@ -170,14 +190,15 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						Diagnostic: "network field is empty, row: ',,,,'",
 					},
 				},
+				ASNCounts: map[uint]int{},
+				Failure:   FailureTooManyInvalidRows,
 			},
-			em:      ErrInvalidGeofeed,
 			laxMode: false,
 		},
 		{
 			gf: "testdata/geofeed-invalid-network.csv",
 			db: "testdata/GeoIP2-City-Test.mmdb",
-			c: CheckResult{
+			c: Result{
 				Total:       2,
 				Differences: 1,
 				Invalid:     1,
@@ -197,15 +218,16 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 							`ParseAddr("2a02:"): colon must be followed by more characters (at ":")`,
 					},
 				},
+				ASNCounts: map[uint]int{},
+				Failure:   FailureTooManyInvalidRows,
 			},
-			em:      ErrInvalidGeofeed,
 			laxMode: false,
 		},
 		{
 			// Geofeed that is valid in lax mode should not be valid if laxMode == true.
 			gf: "testdata/geofeed-valid-lax.csv",
 			db: "testdata/GeoIP2-City-Test.mmdb",
-			c: CheckResult{
+			c: Result{
 				Total:       3,
 				Differences: 1,
 				Invalid:     2,
@@ -224,18 +246,20 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 							"row: '2a02:ecc0::/29,US,NJ,Parsippany,'",
 					},
 				},
+				ASNCounts: map[uint]int{},
+				Failure:   FailureTooManyInvalidRows,
 			},
-			em:      ErrInvalidGeofeed,
 			laxMode: false,
 		},
 		{
 			gf: "testdata/empty.csv",
 			db: "testdata/GeoIP2-City-Test.mmdb",
-			c: CheckResult{
+			c: Result{
 				Total:             0,
 				SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+				ASNCounts:         map[uint]int{},
+				Failure:           FailureEmpty,
 			},
-			em:      ErrEmptyGeofeed,
 			emptyOK: false,
 		},
 	}
@@ -243,7 +267,7 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 	for _, test := range badTests {
 		t.Run(
 			test.gf+" "+test.db, func(t *testing.T) {
-				c, _, _, err := ProcessGeofeed(
+				res, err := ProcessGeofeed(
 					test.gf,
 					test.db,
 					"",
@@ -252,13 +276,10 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 						LaxMode: test.laxMode,
 					},
 				)
-				require.ErrorIs(
-					t,
-					err,
-					test.em,
-					"got expected error: %s", test.em,
-				)
-				assert.Equal(t, test.c, c)
+				// A geofeed that fails verification is not an error: the
+				// verdict is res.Failure, which test.c pins exactly.
+				require.NoError(t, err)
+				assert.Equal(t, test.c, withoutDiffs(res))
 			},
 		)
 	}
@@ -266,71 +287,75 @@ func TestProcessGeofeed_Invalid(t *testing.T) {
 
 func TestProcessGeofeed_FormatOnly(t *testing.T) {
 	t.Run("valid feed, format-only", func(t *testing.T) {
-		c, dl, asnCounts, err := ProcessGeofeed(
+		res, err := ProcessGeofeed(
 			"testdata/geofeed-valid.csv",
 			"",
 			"",
 			Options{},
 		)
 		require.NoError(t, err, "processGeofeed ran without error")
-		assert.Equal(t, 3, c.Total, "expected total rows")
-		assert.Equal(t, 0, c.Differences, "expected no differences")
-		assert.Equal(t, 0, c.Invalid, "expected no invalid rows")
-		assert.Empty(t, dl, "expected no diff lines")
-		assert.Empty(t, asnCounts, "expected no asn counts")
+		assert.Equal(t, FailureNone, res.Failure, "expected no verification failure")
+		assert.Equal(t, 3, res.Total, "expected total rows")
+		assert.Equal(t, 0, res.Differences, "expected no differences")
+		assert.Equal(t, 0, res.Invalid, "expected no invalid rows")
+		assert.Empty(t, res.Diffs, "expected no diff lines")
+		assert.Empty(t, res.ASNCounts, "expected no asn counts")
 	})
 
 	t.Run("malformed feed, format-only", func(t *testing.T) {
-		c, _, _, err := ProcessGeofeed(
+		res, err := ProcessGeofeed(
 			"testdata/geofeed-invalid-missing-fields.csv",
 			"",
 			"",
 			Options{},
 		)
-		require.ErrorIs(t, err, ErrInvalidGeofeed, "got expected error")
+		require.NoError(t, err)
+		assert.Equal(t, FailureTooManyInvalidRows, res.Failure)
 		assert.Contains(
 			t,
-			c.SampleInvalidRows,
+			res.SampleInvalidRows,
 			FewerFieldsThanExpected,
 			"expected a FewerFieldsThanExpected entry",
 		)
 	})
 
 	t.Run("bad region code in strict mode, format-only", func(t *testing.T) {
-		c, _, _, err := ProcessGeofeed(
+		res, err := ProcessGeofeed(
 			"testdata/geofeed-valid-lax.csv",
 			"",
 			"",
 			Options{LaxMode: false},
 		)
-		require.ErrorIs(t, err, ErrInvalidGeofeed, "got expected error")
+		require.NoError(t, err)
+		assert.Equal(t, FailureTooManyInvalidRows, res.Failure)
 		assert.Contains(
 			t,
-			c.SampleInvalidRows,
+			res.SampleInvalidRows,
 			InvalidRegionCode,
 			"expected an InvalidRegionCode entry",
 		)
-		assert.Equal(t, 2, c.Invalid, "expected two invalid rows")
-		assert.Equal(t, 0, c.Differences, "expected no differences")
+		assert.Equal(t, 2, res.Invalid, "expected two invalid rows")
+		assert.Equal(t, 0, res.Differences, "expected no differences")
 	})
 
 	t.Run("lax mode accepts non-prefixed region codes, format-only", func(t *testing.T) {
-		c, dl, asnCounts, err := ProcessGeofeed(
+		res, err := ProcessGeofeed(
 			"testdata/geofeed-valid-lax.csv",
 			"",
 			"",
 			Options{LaxMode: true},
 		)
 		require.NoError(t, err, "processGeofeed ran without error in lax format-only mode")
-		assert.Equal(t, 3, c.Total, "expected total rows")
-		assert.Equal(t, 0, c.Invalid, "expected no invalid rows in lax mode")
-		assert.Equal(t, 0, c.Differences, "expected no differences")
-		assert.Empty(t, dl, "expected no diff lines")
-		assert.Empty(t, asnCounts, "expected no asn counts")
+		assert.Equal(t, FailureNone, res.Failure, "expected no verification failure")
+		assert.Equal(t, 3, res.Total, "expected total rows")
+		assert.Equal(t, 0, res.Invalid, "expected no invalid rows in lax mode")
+		assert.Equal(t, 0, res.Differences, "expected no differences")
+		assert.Empty(t, res.Diffs, "expected no diff lines")
+		assert.Empty(t, res.ASNCounts, "expected no asn counts")
 	})
 
 	t.Run("empty mmdb path opens no DB", func(t *testing.T) {
-		_, _, _, err := ProcessGeofeed(
+		_, err := ProcessGeofeed(
 			"testdata/geofeed-valid.csv",
 			"",
 			"",
@@ -340,7 +365,7 @@ func TestProcessGeofeed_FormatOnly(t *testing.T) {
 	})
 
 	t.Run("missing mmdb path still errors", func(t *testing.T) {
-		_, _, _, err := ProcessGeofeed(
+		_, err := ProcessGeofeed(
 			"testdata/geofeed-valid.csv",
 			"testdata/does-not-exist.mmdb",
 			"",
@@ -360,15 +385,16 @@ func TestInvalidRowZeroValueTypeIsUnknown(t *testing.T) {
 }
 
 func TestSampleInvalidRowReportsFileLine(t *testing.T) {
-	counts, _, _, err := ProcessGeofeed(
+	res, err := ProcessGeofeed(
 		"testdata/comments-then-short-row.csv",
 		"testdata/GeoIP2-City-Test.mmdb",
 		"",
 		Options{},
 	)
-	require.ErrorIs(t, err, ErrInvalidGeofeed)
+	require.NoError(t, err)
+	require.Equal(t, FailureTooManyInvalidRows, res.Failure)
 
-	detail, ok := counts.SampleInvalidRows[FewerFieldsThanExpected]
+	detail, ok := res.SampleInvalidRows[FewerFieldsThanExpected]
 	require.True(t, ok, "expected a sample for FewerFieldsThanExpected")
 
 	// The short row is on file line 5: Line is the true file line, counting
@@ -391,15 +417,16 @@ func TestSampleInvalidRowReportsFileLine(t *testing.T) {
 // TestSampleInvalidRowReportsFileLine above). Reverting this site's Line
 // back to the comment-skipping row counter must fail this test.
 func TestSampleInvalidRowReportsFileLineForVerifyCorrection(t *testing.T) {
-	counts, _, _, err := ProcessGeofeed(
+	res, err := ProcessGeofeed(
 		"testdata/comments-then-empty-network.csv",
 		"testdata/GeoIP2-City-Test.mmdb",
 		"",
 		Options{},
 	)
-	require.ErrorIs(t, err, ErrInvalidGeofeed)
+	require.NoError(t, err)
+	require.Equal(t, FailureTooManyInvalidRows, res.Failure)
 
-	detail, ok := counts.SampleInvalidRows[EmptyNetwork]
+	detail, ok := res.SampleInvalidRows[EmptyNetwork]
 	require.True(t, ok, "expected a sample for EmptyNetwork")
 
 	// The empty-network row is on file line 5: Line counts the three
@@ -408,7 +435,7 @@ func TestSampleInvalidRowReportsFileLineForVerifyCorrection(t *testing.T) {
 	assert.Equal(t, 5, detail.Line)
 	assert.Equal(t, EmptyNetwork, detail.Type)
 	assert.Equal(t, []string{"", "", "", "", ""}, detail.Fields)
-	assert.Equal(t, 2, counts.Total)
+	assert.Equal(t, 2, res.Total)
 	assert.Equal(t, "network field is empty, row: ',,,,'", detail.Diagnostic)
 }
 
@@ -422,30 +449,32 @@ func TestSampleInvalidRowReportsFileLineForVerifyCorrection(t *testing.T) {
 // content.
 func TestSampleInvalidRowFieldsSurviveReuseRecord(t *testing.T) {
 	t.Run("verifyCorrection site", func(t *testing.T) {
-		counts, _, _, err := ProcessGeofeed(
+		res, err := ProcessGeofeed(
 			"testdata/reuse-record-empty-network-repeated.csv",
 			"testdata/GeoIP2-City-Test.mmdb",
 			"",
 			Options{},
 		)
-		require.ErrorIs(t, err, ErrInvalidGeofeed)
+		require.NoError(t, err)
+		require.Equal(t, FailureTooManyInvalidRows, res.Failure)
 
-		detail, ok := counts.SampleInvalidRows[EmptyNetwork]
+		detail, ok := res.SampleInvalidRows[EmptyNetwork]
 		require.True(t, ok, "expected a sample detail for EmptyNetwork")
 
 		assert.Equal(t, []string{"", "AAAA", "BBBB", "CCCC", "DDDD"}, detail.Fields)
 	})
 
 	t.Run("too-few-fields site", func(t *testing.T) {
-		counts, _, _, err := ProcessGeofeed(
+		res, err := ProcessGeofeed(
 			"testdata/reuse-record-short-row-repeated.csv",
 			"testdata/GeoIP2-City-Test.mmdb",
 			"",
 			Options{},
 		)
-		require.ErrorIs(t, err, ErrInvalidGeofeed)
+		require.NoError(t, err)
+		require.Equal(t, FailureTooManyInvalidRows, res.Failure)
 
-		detail, ok := counts.SampleInvalidRows[FewerFieldsThanExpected]
+		detail, ok := res.SampleInvalidRows[FewerFieldsThanExpected]
 		require.True(t, ok, "expected a sample detail for FewerFieldsThanExpected")
 
 		assert.Equal(t, []string{"AAAA", "BBBB", "CCCC"}, detail.Fields)
@@ -469,13 +498,18 @@ func TestProcessGeofeed_NonUTF8(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			_, _, _, err := ProcessGeofeed(
+			res, err := ProcessGeofeed(
 				test.gf,
 				"testdata/GeoIP2-City-Test.mmdb",
 				"",
 				Options{},
 			)
-			require.ErrorIs(t, err, ErrNotUTF8)
+			require.NoError(t, err)
+			assert.Equal(t, FailureNotUTF8, res.Failure)
+			// Nothing is read from a file whose encoding cannot be
+			// trusted, so no rows are counted or sampled.
+			assert.Equal(t, 0, res.Total)
+			assert.Empty(t, res.SampleInvalidRows)
 		})
 	}
 }
@@ -499,16 +533,17 @@ func TestInvalidRowsHaveDiagnostic(t *testing.T) {
 
 	for _, gf := range fixtures {
 		t.Run(gf, func(t *testing.T) {
-			counts, _, _, err := ProcessGeofeed(
+			res, err := ProcessGeofeed(
 				gf,
 				"testdata/GeoIP2-City-Test.mmdb",
 				"",
 				Options{},
 			)
-			require.ErrorIs(t, err, ErrInvalidGeofeed)
-			require.NotEmpty(t, counts.SampleInvalidRows, "expected at least one sample")
+			require.NoError(t, err)
+			require.Equal(t, FailureTooManyInvalidRows, res.Failure)
+			require.NotEmpty(t, res.SampleInvalidRows, "expected at least one sample")
 
-			for invType, detail := range counts.SampleInvalidRows {
+			for invType, detail := range res.SampleInvalidRows {
 				assert.NotEmpty(
 					t,
 					detail.Diagnostic,
@@ -622,7 +657,7 @@ func TestProcessGeofeedCityDatabaseLookupFailure(t *testing.T) {
 		"fixture's first row must still be an IPv6 network",
 	)
 
-	_, _, _, err := ProcessGeofeed(
+	res, err := ProcessGeofeed(
 		"testdata/geofeed-valid.csv",
 		"testdata/MaxMind-DB-test-ipv4-24.mmdb",
 		"",
@@ -634,6 +669,10 @@ func TestProcessGeofeedCityDatabaseLookupFailure(t *testing.T) {
 	// maxminddb-golang, and a library or Go upgrade could reword it.
 	assert.Contains(t, err.Error(), "2a02:ecc0::/29")
 	assert.Contains(t, err.Error(), "IPv6")
+	// An error is not a verdict on the geofeed: the rows were never
+	// evaluated, so Failure must stay FailureNone rather than blame the
+	// feed for our database being unusable.
+	assert.Equal(t, FailureNone, res.Failure)
 }
 
 // TestProcessGeofeedISPDatabaseLookupFailure covers the ISP-database
@@ -652,7 +691,7 @@ func TestProcessGeofeedISPDatabaseLookupFailure(t *testing.T) {
 		"fixture's first row must still be an IPv6 network",
 	)
 
-	_, _, _, err := ProcessGeofeed(
+	_, err := ProcessGeofeed(
 		"testdata/geofeed-valid.csv",
 		"testdata/GeoIP2-City-Test.mmdb",
 		"testdata/MaxMind-DB-test-ipv4-24.mmdb",
@@ -678,25 +717,26 @@ func TestProcessGeofeedISPDatabaseLookupFailure(t *testing.T) {
 // hyphen, so it passes strict-mode region-code validation and the row
 // survives to reach the augmentation code at all.
 func TestProcessGeofeedISPAugmentation(t *testing.T) {
-	c, diffLines, asnCounts, err := ProcessGeofeed(
+	res, err := ProcessGeofeed(
 		"testdata/geofeed-isp.csv",
 		"testdata/GeoIP2-City-Test.mmdb",
 		"testdata/GeoIP2-ISP-Test.mmdb",
 		Options{},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 1, c.Total)
-	assert.Equal(t, 1, c.Differences)
-	assert.Equal(t, 0, c.Invalid)
+	assert.Equal(t, FailureNone, res.Failure)
+	assert.Equal(t, 1, res.Total)
+	assert.Equal(t, 1, res.Differences)
+	assert.Equal(t, 0, res.Invalid)
 
 	// ::1.128.0.0/107 in GeoIP2-ISP-Test.mmdb carries ASN 1221, "Telstra Pty
 	// Ltd", ISP "Telstra Internet".
-	assert.Equal(t, map[uint]int{1221: 1}, asnCounts)
+	assert.Equal(t, map[uint]int{1221: 1}, res.ASNCounts)
 
-	require.Len(t, diffLines, 1)
-	assert.Contains(t, diffLines[0], "AS Number: 1221")
-	assert.Contains(t, diffLines[0], "AS Name: Telstra Pty Ltd")
-	assert.Contains(t, diffLines[0], "ISP Name: Telstra Internet")
+	require.Len(t, res.Diffs, 1)
+	assert.Contains(t, res.Diffs[0], "AS Number: 1221")
+	assert.Contains(t, res.Diffs[0], "AS Name: Telstra Pty Ltd")
+	assert.Contains(t, res.Diffs[0], "ISP Name: Telstra Internet")
 }
 
 // TestProcessGeofeedUnopenableCityDatabase covers the City MMDB
@@ -704,7 +744,7 @@ func TestProcessGeofeedISPAugmentation(t *testing.T) {
 // kind of MaxMind-side fault as a failed lookup, so ErrDatabaseLookup must
 // wrap this too, not just the two decode-failure sites.
 func TestProcessGeofeedUnopenableCityDatabase(t *testing.T) {
-	_, _, _, err := ProcessGeofeed(
+	_, err := ProcessGeofeed(
 		"testdata/geofeed-valid.csv",
 		"testdata/does-not-exist.mmdb",
 		"",
@@ -718,7 +758,7 @@ func TestProcessGeofeedUnopenableCityDatabase(t *testing.T) {
 // path specifically -- a different return site than the City one above,
 // so it needs its own proof that ErrDatabaseLookup wraps it too.
 func TestProcessGeofeedUnopenableISPDatabase(t *testing.T) {
-	_, _, _, err := ProcessGeofeed(
+	_, err := ProcessGeofeed(
 		"testdata/geofeed-valid.csv",
 		"testdata/GeoIP2-City-Test.mmdb",
 		"testdata/does-not-exist.mmdb",
@@ -728,12 +768,63 @@ func TestProcessGeofeedUnopenableISPDatabase(t *testing.T) {
 	require.ErrorIs(t, err, ErrDatabaseLookup)
 }
 
+// TestProcessGeofeedUnreadableCSV covers the CSV parse-failure path.
+// Malformed quoting is the geofeed's fault, so it is a Failure and not an
+// error, and the reader cannot resynchronize afterward: the counts stop at
+// the last row read before the offending line.
+func TestProcessGeofeedUnreadableCSV(t *testing.T) {
+	res, err := ProcessGeofeed(
+		"testdata/malformed-quoting.csv",
+		"testdata/GeoIP2-City-Test.mmdb",
+		"",
+		Options{},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, FailureUnreadableCSV, res.Failure)
+	// Only the first data row (file line 2) was read; the malformed line 3
+	// aborts parsing, so line 4's valid row is never seen.
+	assert.Equal(t, 1, res.Total)
+	assert.Equal(t, 0, res.Invalid)
+	// The offending line is not a row that failed validation -- it never
+	// parsed into a row at all -- so it must not appear as a sample.
+	assert.Empty(t, res.SampleInvalidRows)
+}
+
+// TestResultZeroValueFailureIsNone guards against FailureReason's zero value
+// meaning anything other than "passed". A Result a caller forgot to populate
+// must not claim the geofeed failed, which is what makes reporting failures
+// as values safe.
+func TestResultZeroValueFailureIsNone(t *testing.T) {
+	var zero Result
+	assert.Equal(t, FailureNone, zero.Failure)
+}
+
+func TestFailureReasonString(t *testing.T) {
+	tests := []struct {
+		reason FailureReason
+		want   string
+	}{
+		{FailureNone, "FailureNone"},
+		{FailureNotUTF8, "FailureNotUTF8"},
+		{FailureEmpty, "FailureEmpty"},
+		{FailureTooManyInvalidRows, "FailureTooManyInvalidRows"},
+		{FailureUnreadableCSV, "FailureUnreadableCSV"},
+		{FailureReason(99), "UnknownFailureReason"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.reason.String())
+		})
+	}
+}
+
 // TestProcessGeofeedCorruptCityDatabase covers a database that exists but
 // isn't a valid MMDB at all, as opposed to simply missing -- a cheap
 // second trigger for the same open-failure path, reusing an existing
 // non-MMDB fixture rather than adding a new binary one.
 func TestProcessGeofeedCorruptCityDatabase(t *testing.T) {
-	_, _, _, err := ProcessGeofeed(
+	_, err := ProcessGeofeed(
 		"testdata/geofeed-valid.csv",
 		"testdata/geofeed-valid.csv",
 		"",
