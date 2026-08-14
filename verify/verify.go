@@ -214,9 +214,9 @@ func ProcessGeofeed(
 			// Malformed CSV -- unbalanced quoting, say -- is the geofeed's
 			// fault, not ours, and the reader cannot resynchronize, so the
 			// counts gathered so far are all there will be. The parser's own
-			// message names the line and column it gave up at, which is the
-			// only record of where the trouble is: no row was produced, so
-			// nothing lands in SampleInvalidRows.
+			// message names the line and column it gave up at, and is the
+			// only record of that location, since the offending line produced
+			// no row. Rows read before it stay in SampleInvalidRows.
 			c.Failure = FailureUnreadableCSV
 			if opts.HideFilePathsInErrorMessages {
 				c.FailureDiagnostic = fmt.Sprintf("unable to read next row: %s", err)
