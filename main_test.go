@@ -167,3 +167,76 @@ func TestFormatInvalidRows(t *testing.T) {
 		assert.NotContains(t, line, "''", "line has doubled quotes: %q", line)
 	}
 }
+
+// TestRun drives run end to end. Nothing else does, so the distinction this
+// program exists to make -- an unusable database is our problem, an invalid
+// geofeed is the feed's -- is only pinned here. Swapping those two branches
+// leaves every other test passing.
+func TestRun(t *testing.T) {
+	const (
+		cityDB     = "verify/testdata/GeoIP2-City-Test.mmdb"
+		absentDB   = "verify/testdata/does-not-exist.mmdb"
+		validFeed  = "verify/testdata/geofeed-valid.csv"
+		shortRows  = "verify/testdata/geofeed-invalid-missing-fields.csv"
+		badQuoting = "verify/testdata/malformed-quoting.csv"
+	)
+
+	tests := []struct {
+		name string
+		args []string
+		// wantErrContains holds substrings the returned error must have, or
+		// is empty when the geofeed is expected to pass.
+		wantErrContains []string
+		wantDatabaseErr bool
+	}{
+		{
+			name:            "unusable database",
+			args:            []string{"-gf", validFeed, "-db", absentDB},
+			wantErrContains: []string{"MMDB unavailable"},
+			wantDatabaseErr: true,
+		},
+		{
+			name:            "geofeed with invalid rows",
+			args:            []string{"-gf", shortRows, "-db", cityDB},
+			wantErrContains: []string{"failed verification", "RFC 8805"},
+		},
+		{
+			name: "geofeed the parser cannot read",
+			args: []string{"-gf", badQuoting, "-db", cityDB},
+			// The parse location reaches the user only through
+			// FailureDiagnostic, so its absence would be silent.
+			wantErrContains: []string{
+				"could not be parsed as CSV",
+				"line 3, column 15",
+			},
+		},
+		{
+			name: "valid geofeed",
+			args: []string{"-gf", validFeed, "-db", cityDB},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := run("mm-geofeed-verifier", test.args)
+
+			if len(test.wantErrContains) == 0 {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Error(t, err)
+			for _, want := range test.wantErrContains {
+				assert.Contains(t, err.Error(), want)
+			}
+
+			// A geofeed's own failure must not carry the database sentinel: a
+			// consumer keys its retry-versus-report decision on it.
+			if test.wantDatabaseErr {
+				require.ErrorIs(t, err, verify.ErrDatabaseLookup)
+			} else {
+				require.NotErrorIs(t, err, verify.ErrDatabaseLookup)
+			}
+		})
+	}
+}

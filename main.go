@@ -36,14 +36,18 @@ type config struct {
 }
 
 func main() {
-	err := run()
+	err := run(os.Args[0], os.Args[1:])
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run() error {
-	conf, output, err := parseFlags(os.Args[0], os.Args[1:])
+// run takes the program name and arguments rather than reading os.Args so a
+// test can drive it end to end. Whether a failure is reported as the
+// database's or the geofeed's is the distinction most worth pinning, and it is
+// only observable from here.
+func run(program string, args []string) error {
+	conf, output, err := parseFlags(program, args)
 	if err != nil {
 		fmt.Println(output)
 		return err
