@@ -80,7 +80,23 @@ func run() error {
 				log.Print(line)
 			}
 		}
-		return fmt.Errorf("geofeed %s failed verification: %s", conf.gf, res.Failure)
+		// FailureDiagnostic is set only for FailureUnreadableCSV, where no row
+		// was produced and the parser's line and column are the only record
+		// of where the trouble is. Every other failure describes itself
+		// through the lines above, so nothing is repeated here.
+		if res.FailureDiagnostic != "" {
+			return fmt.Errorf(
+				"geofeed %s failed verification: %s (%s)",
+				conf.gf,
+				res.Failure.Description(),
+				res.FailureDiagnostic,
+			)
+		}
+		return fmt.Errorf(
+			"geofeed %s failed verification: %s",
+			conf.gf,
+			res.Failure.Description(),
+		)
 	}
 
 	if conf.db == "" {

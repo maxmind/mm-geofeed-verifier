@@ -109,6 +109,31 @@ func (fr FailureReason) String() string {
 	}
 }
 
+// Description returns a plain sentence naming the failure, safe to show
+// someone who is not an engineer. String reports the constant's own name,
+// which suits a log or a test but reads as jargon to the person whose geofeed
+// failed.
+//
+// It is a default rather than a contract: the wording can change, so it must
+// not be parsed, and a consumer with its own voice should write its own copy
+// keyed on the FailureReason instead.
+func (fr FailureReason) Description() string {
+	switch fr {
+	case FailureNone:
+		return "the geofeed passed verification"
+	case FailureNotUTF8:
+		return "the geofeed is not valid UTF-8"
+	case FailureEmpty:
+		return "the geofeed has no records"
+	case FailureInvalidRows:
+		return "the geofeed does not comply with the RFC 8805 standards"
+	case FailureUnreadableCSV:
+		return "the geofeed could not be parsed as CSV"
+	default:
+		return "the geofeed failed for an unknown reason"
+	}
+}
+
 // Options contains configuration options for geofeed verification.
 type Options struct {
 	// // LaxMode controls validation for region codes. If LaxMode is false

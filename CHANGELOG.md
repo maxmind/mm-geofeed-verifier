@@ -38,6 +38,12 @@
   CSV parser gave up for a `FailureUnreadableCSV`, and is empty for the failure
   reasons that have no particulars to add. It honors
   `Options.HideFilePathsInErrorMessages`.
+- `FailureReason.Description` returns a plain sentence naming the failure, safe
+  to show someone who is not an engineer, where `String` returns the constant's
+  own name. The wording is a default rather than a contract: it can change, so
+  it must not be parsed. The command-line program reports it instead of the
+  constant name, and appends `Result.FailureDiagnostic` when set, so an
+  unparseable geofeed again names the line and column the parser gave up at.
 - Breaking: lines holding only whitespace are skipped, as comment lines already
   are. Previously such a line parsed as a single empty field, counted toward
   `Result.Total`, and was reported as a `FewerFieldsThanExpected` invalid row
