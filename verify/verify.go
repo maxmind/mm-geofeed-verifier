@@ -11,30 +11,126 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/oschwald/maxminddb-golang/v2"
 )
 
-// CheckResult holds the total number of rows for a geofeed file,
-// the number of rows that differ from expected mmdb values as well
-// as information about the rows that failed validation.
-// To create new CheckResult instance use NewCheckResult() func.
-type CheckResult struct {
-	Total             int
-	Differences       int
-	Invalid           int
-	SampleInvalidRows map[RowInvalidity]string
+// Result holds the outcome of verifying a geofeed file: the total number of
+// rows, the number of rows that differ from the expected MMDB values,
+// information about the rows that failed validation, and -- if the geofeed
+// failed verification as a whole -- why.
+type Result struct {
+	Total       int
+	Differences int
+	Invalid     int
+	// SampleInvalidRows holds one sample InvalidRow per RowInvalidity kind
+	// encountered, keyed by kind.
+	SampleInvalidRows map[RowInvalidity]InvalidRow
+	// Diffs holds engineer-facing text describing each row whose MMDB
+	// record differs from what the geofeed claims, one entry per row.
+	Diffs []string
+	// ASNCounts counts how many rows resolved to each autonomous system
+	// number. It stays empty unless an ISP database was provided.
+	ASNCounts map[uint]int
+	// Failure says why the geofeed failed verification, or is FailureNone if
+	// it passed.
+	Failure FailureReason
+	// FailureDiagnostic is internal, engineer-facing text about Failure --
+	// where the CSV parser stopped and why, for instance. Like
+	// InvalidRow.Diagnostic, it is unstable, must not be parsed, and must
+	// not be shown to a geofeed's owner: Failure is what a consumer maps to
+	// customer-facing wording.
+	//
+	// It is empty whenever the failure has no particulars to add beyond
+	// Failure itself, which includes every FailureReason except
+	// FailureUnreadableCSV. FailureInvalidRows describes itself
+	// through SampleInvalidRows instead.
+	FailureDiagnostic string
 }
 
-// NewCheckResult returns new CheckResult instance.
-func NewCheckResult() CheckResult {
-	return CheckResult{
-		Total:             0,
-		Differences:       0,
-		Invalid:           0,
-		SampleInvalidRows: map[RowInvalidity]string{},
+func newResult() Result {
+	return Result{
+		SampleInvalidRows: map[RowInvalidity]InvalidRow{},
+		ASNCounts:         map[uint]int{},
+	}
+}
+
+// FailureReason identifies why a geofeed failed verification. It is a
+// verdict on the geofeed's contents rather than a fault of the verifier, so
+// ProcessGeofeed reports it as a value on Result and not as an error: a
+// caller that treats every non-nil error as fatal must not abort a run
+// because one geofeed is malformed.
+type FailureReason int
+
+// Verification failure reasons.
+const (
+	// FailureNone is the zero value of FailureReason: the geofeed passed
+	// verification.
+	FailureNone FailureReason = iota
+	// FailureNotUTF8 indicates a file encoding that is not valid UTF-8
+	// (with an optional BOM). RFC 8805 says that "feeds MUST use UTF-8
+	// character encoding", and nothing in the file can be read confidently
+	// without it, so no rows are examined.
+	FailureNotUTF8
+	// FailureEmpty indicates a geofeed with no records. It is only reported
+	// when Options.EmptyOK is false.
+	FailureEmpty
+	// FailureInvalidRows indicates incomplete compliance with the RFC 8805
+	// standards and the mode in which the verifier ran: at least one row
+	// failed validation. There is no threshold -- one bad row is enough, so
+	// this cannot support a policy that tolerates a few of them.
+	// Result.SampleInvalidRows holds one example per kind of invalidity
+	// found.
+	FailureInvalidRows
+	// FailureUnreadableCSV indicates that the file could not be parsed as
+	// CSV at all -- malformed quoting, for example. Parsing stops at the
+	// offending line, so the row counts cover only the rows ahead of it.
+	FailureUnreadableCSV
+)
+
+// String implements the Stringer interface.
+func (fr FailureReason) String() string {
+	switch fr {
+	case FailureNone:
+		return "FailureNone"
+	case FailureNotUTF8:
+		return "FailureNotUTF8"
+	case FailureEmpty:
+		return "FailureEmpty"
+	case FailureInvalidRows:
+		return "FailureInvalidRows"
+	case FailureUnreadableCSV:
+		return "FailureUnreadableCSV"
+	default:
+		return "UnknownFailureReason"
+	}
+}
+
+// Description returns a plain sentence naming the failure, safe to show
+// someone who is not an engineer. String reports the constant's own name,
+// which suits a log or a test but reads as jargon to the person whose geofeed
+// failed.
+//
+// It is a default rather than a contract: the wording can change, so it must
+// not be parsed, and a consumer with its own voice should write its own copy
+// keyed on the FailureReason instead.
+func (fr FailureReason) Description() string {
+	switch fr {
+	case FailureNone:
+		return "the geofeed passed verification"
+	case FailureNotUTF8:
+		return "the geofeed is not valid UTF-8"
+	case FailureEmpty:
+		return "the geofeed has no records"
+	case FailureInvalidRows:
+		return "the geofeed does not comply with the RFC 8805 standards"
+	case FailureUnreadableCSV:
+		return "the geofeed could not be parsed as CSV"
+	default:
+		return "the geofeed failed for an unknown reason"
 	}
 }
 
@@ -53,29 +149,36 @@ type Options struct {
 	EmptyOK bool
 }
 
-// ProcessGeofeed attempts to validate a given geofeedFilename.
+// ProcessGeofeed verifies the geofeed in geofeedFilename, comparing each row
+// against mmdbFilename (augmented by ispFilename, if given) when an MMDB is
+// provided and checking the row's format only when it is not.
+//
+// It returns a non-nil error only when verification could not be performed at
+// all -- the file was unreadable, or an MMDB was unusable (see
+// ErrDatabaseLookup). A geofeed that fails verification is not an error; it
+// is a Result whose Failure says why.
 func ProcessGeofeed(
 	geofeedFilename,
 	mmdbFilename,
 	ispFilename string,
 	opts Options,
-) (CheckResult, []string, map[uint]int, error) {
-	c := NewCheckResult()
-	var diffLines []string
+) (Result, error) {
+	c := newResult()
 
 	geofeedData, err := os.ReadFile(filepath.Clean(geofeedFilename))
 	if err != nil {
 		if opts.HideFilePathsInErrorMessages {
-			return c, diffLines, nil, fmt.Errorf("unable to open file: %w", err)
+			return c, fmt.Errorf("unable to open file: %w", err)
 		}
-		return c, diffLines, nil, fmt.Errorf("unable to open %s: %w", geofeedFilename, err)
+		return c, fmt.Errorf("unable to open %s: %w", geofeedFilename, err)
 	}
 
 	// Strip UTF-8 BOM if present (common on files from Windows).
 	geofeedData = bytes.TrimPrefix(geofeedData, []byte{0xEF, 0xBB, 0xBF})
 
 	if !utf8.Valid(geofeedData) {
-		return c, diffLines, nil, ErrNotUTF8
+		c.Failure = FailureNotUTF8
+		return c, nil
 	}
 
 	var db, ispdb *maxminddb.Reader
@@ -83,9 +186,18 @@ func ProcessGeofeed(
 		db, err = maxminddb.Open(filepath.Clean(mmdbFilename))
 		if err != nil {
 			if opts.HideFilePathsInErrorMessages {
-				return c, diffLines, nil, fmt.Errorf("unable to open MMDB: %w", err)
+				return c, fmt.Errorf(
+					"unable to open MMDB: %w: %w",
+					ErrDatabaseLookup,
+					err,
+				)
 			}
-			return c, diffLines, nil, fmt.Errorf("unable to open MMDB %s: %w", mmdbFilename, err)
+			return c, fmt.Errorf(
+				"unable to open MMDB %s: %w: %w",
+				mmdbFilename,
+				ErrDatabaseLookup,
+				err,
+			)
 		}
 		defer db.Close()
 
@@ -93,18 +205,22 @@ func ProcessGeofeed(
 			ispdb, err = maxminddb.Open(filepath.Clean(ispFilename))
 			if err != nil {
 				if opts.HideFilePathsInErrorMessages {
-					return c, diffLines, nil, fmt.Errorf("unable to open ISP MMDB: %w", err)
+					return c, fmt.Errorf(
+						"unable to open ISP MMDB: %w: %w",
+						ErrDatabaseLookup,
+						err,
+					)
 				}
-				return c, diffLines, nil, fmt.Errorf(
-					"unable to open ISP MMDB %s: %w",
+				return c, fmt.Errorf(
+					"unable to open ISP MMDB %s: %w: %w",
 					ispFilename,
+					ErrDatabaseLookup,
 					err,
 				)
 			}
 			defer ispdb.Close()
 		}
 	}
-	asnCounts := map[uint]int{}
 
 	csvReader := csv.NewReader(bytes.NewReader(geofeedData))
 	csvReader.ReuseRecord = true
@@ -120,45 +236,71 @@ func ProcessGeofeed(
 			break
 		}
 		if err != nil {
+			// Malformed CSV -- unbalanced quoting, say -- is the geofeed's
+			// fault, not ours, and the reader cannot resynchronize, so the
+			// counts gathered so far are all there will be. The parser's own
+			// message names the line and column it gave up at, and is the
+			// only record of that location, since the offending line produced
+			// no row. Rows read before it stay in SampleInvalidRows.
+			c.Failure = FailureUnreadableCSV
 			if opts.HideFilePathsInErrorMessages {
-				return c, diffLines, asnCounts, fmt.Errorf("unable to read next row: %w", err)
+				c.FailureDiagnostic = fmt.Sprintf("unable to read next row: %s", err)
+			} else {
+				c.FailureDiagnostic = fmt.Sprintf(
+					"unable to read next row in %s: %s",
+					geofeedFilename,
+					err,
+				)
 			}
-			return c, diffLines, asnCounts, fmt.Errorf(
-				"unable to read next row in %s: %w",
-				geofeedFilename,
-				err,
-			)
+			return c, nil
+		}
+
+		if isBlank(row) {
+			continue
 		}
 
 		c.Total++
 
 		if len(row) < expectedFieldsPerRecord {
 			if _, ok := c.SampleInvalidRows[FewerFieldsThanExpected]; !ok {
-				c.SampleInvalidRows[FewerFieldsThanExpected] = fmt.Sprintf(
-					"line %d: expected %d fields but got %d, row: '%s'",
-					c.Total,
-					expectedFieldsPerRecord,
-					len(row),
-					strings.Join(row, ","),
+				c.SampleInvalidRows[FewerFieldsThanExpected] = newInvalidRow(
+					sampleLine(csvReader, row),
+					// ReuseRecord means row's backing array is overwritten by
+					// the next Read; clone it so this sample survives.
+					slices.Clone(row),
+					fewerFieldsResult(row, expectedFieldsPerRecord),
 				)
 			}
 			c.Invalid++
 			continue
 		}
 
-		diffLine, result := verifyCorrection(
-			row[:expectedFieldsPerRecord],
+		// verifyCorrection trims its correction argument in place, and that
+		// argument aliases row's backing array, so the fields must be cloned
+		// before the call rather than copied from row afterward.
+		correction := row[:expectedFieldsPerRecord]
+		fields := slices.Clone(correction)
+
+		diffLine, result, err := verifyCorrection(
+			correction,
 			db,
 			ispdb,
-			asnCounts,
+			c.ASNCounts,
 			opts,
 		)
+		if err != nil {
+			// A lookup failure means the database is unusable, not that
+			// this row is invalid: the row was never evaluated, so it must
+			// not be recorded as a sample invalid row, and processing
+			// cannot usefully continue for the rows after it either.
+			return c, err
+		}
 		if !result.valid {
 			if _, ok := c.SampleInvalidRows[result.invalidityType]; !ok {
-				c.SampleInvalidRows[result.invalidityType] = fmt.Sprintf(
-					"line %d: %s",
-					c.Total,
-					result.invalidityReason,
+				c.SampleInvalidRows[result.invalidityType] = newInvalidRow(
+					sampleLine(csvReader, row),
+					fields,
+					result,
 				)
 			}
 			c.Invalid++
@@ -166,46 +308,103 @@ func ProcessGeofeed(
 		}
 
 		if diffLine != "" {
-			diffLines = append(diffLines, diffLine)
+			c.Diffs = append(c.Diffs, diffLine)
 			c.Differences++
 		}
 	}
-	if err != nil && !errors.Is(err, io.EOF) {
-		if opts.HideFilePathsInErrorMessages {
-			return c, diffLines, asnCounts, fmt.Errorf("error reading file: %w", err)
-		}
-		return c, diffLines, asnCounts, fmt.Errorf(
-			"error while reading %s: %w",
-			geofeedFilename,
-			err,
-		)
-	}
 
 	if c.Total == 0 && !opts.EmptyOK {
-		return c, diffLines, asnCounts, ErrEmptyGeofeed
+		c.Failure = FailureEmpty
+		return c, nil
 	}
 
 	if c.Invalid > 0 || len(c.SampleInvalidRows) > 0 {
-		return c, diffLines, asnCounts, ErrInvalidGeofeed
+		c.Failure = FailureInvalidRows
+		return c, nil
 	}
 
-	return c, diffLines, asnCounts, nil
+	return c, nil
+}
+
+// isBlank reports whether row carries no data at all. csv.Reader skips a
+// genuinely empty line by itself, but a line holding only spaces or tabs
+// parses as a single empty field, which would otherwise be counted as a row
+// and reported as one with too few fields -- a sample row with nothing in it
+// for a line the feed's author intended as blank.
+func isBlank(row []string) bool {
+	return len(row) == 0 || (len(row) == 1 && strings.TrimSpace(row[0]) == "")
+}
+
+// sampleLine returns the geofeed file line of row via csvReader's FieldPos.
+// FieldPos panics if the field index is out of range; csv.Reader never
+// actually returns a zero-field record with a nil error, but the guard is
+// cheap insurance against a panic if that ever changes.
+func sampleLine(csvReader *csv.Reader, row []string) int {
+	if len(row) == 0 {
+		return 0
+	}
+	line, _ := csvReader.FieldPos(0)
+	return line
 }
 
 type verificationResult struct {
-	valid            bool
-	invalidityType   RowInvalidity
-	invalidityReason string
+	valid          bool
+	invalidityType RowInvalidity
+	// diagnostic is internal, engineer-facing text: it feeds
+	// InvalidRow.Diagnostic (rendered as "line %d: %s" by InvalidRow.String)
+	// and may embed raw error text or the row itself.
+	diagnostic string
+	// reason is customer-facing wording for the same failure: it feeds
+	// InvalidRow.Reason instead of diagnostic. It must be a fixed string
+	// per invalidity type -- never interpolating a row field or a value
+	// derived from one -- and must never surface an internal error or a
+	// library name.
+	reason string
+}
+
+// newInvalidRow builds the InvalidRow for a sample found on the given file
+// line, with the given fields, from a verificationResult describing why
+// it's invalid.
+func newInvalidRow(line int, fields []string, res verificationResult) InvalidRow {
+	return InvalidRow{
+		Line:       line,
+		Type:       res.invalidityType,
+		Fields:     fields,
+		Reason:     res.reason,
+		Diagnostic: res.diagnostic,
+	}
+}
+
+// fewerFieldsResult builds the verificationResult for a row with fewer
+// fields than expected.
+func fewerFieldsResult(row []string, expected int) verificationResult {
+	return verificationResult{
+		valid:          false,
+		invalidityType: FewerFieldsThanExpected,
+		diagnostic: fmt.Sprintf(
+			"expected %d fields but got %d, row: '%s'",
+			expected,
+			len(row),
+			strings.Join(row, ","),
+		),
+		reason: fmt.Sprintf(
+			"The row has %d fields, but a geofeed row requires %d.",
+			len(row),
+			expected,
+		),
+	}
 }
 
 func invalidRegionCodeResult(correction []string) verificationResult {
 	return verificationResult{
 		valid:          false,
 		invalidityType: InvalidRegionCode,
-		invalidityReason: fmt.Sprintf(
+		diagnostic: fmt.Sprintf(
 			"invalid ISO 3166-2 region code format in strict (default) mode, row: '%s'",
 			strings.Join(correction, ","),
 		),
+		reason: "The region code is not in ISO 3166-2 format (for example, US-CA). " +
+			"Enable lax mode to accept a region code without the country prefix.",
 	}
 }
 
@@ -214,7 +413,7 @@ func verifyCorrection(
 	db, ispdb *maxminddb.Reader,
 	asnCounts map[uint]int,
 	opts Options,
-) (string, verificationResult) {
+) (string, verificationResult, error) {
 	/*
 	   0: network (CIDR or single IP)
 	   1: ISO-3166 country code
@@ -232,11 +431,12 @@ func verifyCorrection(
 		return "", verificationResult{
 			valid:          false,
 			invalidityType: EmptyNetwork,
-			invalidityReason: fmt.Sprintf(
+			diagnostic: fmt.Sprintf(
 				"network field is empty, row: '%s'",
 				strings.Join(correction, ","),
 			),
-		}
+			reason: "The network field is empty.",
+		}, nil
 	}
 	if !(strings.Contains(networkOrIP, "/")) {
 		if strings.Contains(networkOrIP, ":") {
@@ -248,81 +448,66 @@ func verifyCorrection(
 	network, err := netip.ParsePrefix(networkOrIP)
 	if err != nil {
 		return "", verificationResult{
-			valid:            false,
-			invalidityType:   UnableToParseNetwork,
-			invalidityReason: fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
-		}
+			valid:          false,
+			invalidityType: UnableToParseNetwork,
+			diagnostic:     fmt.Sprintf("unable to parse network %s: %s", networkOrIP, err),
+			reason:         "The network field is not a valid IP address or CIDR.",
+		}, nil
 	}
 
 	if db == nil {
 		// format-only mode: only the DB-independent region-code format rule applies.
 		if !strings.Contains(correction[2], "-") && correction[2] != "" && !opts.LaxMode {
-			return "", invalidRegionCodeResult(correction)
+			return "", invalidRegionCodeResult(correction), nil
 		}
 		return "", verificationResult{
-			valid:            true,
-			invalidityType:   RowInvalidity(-1),
-			invalidityReason: "",
-		}
+			valid:          true,
+			invalidityType: UnknownInvalidity,
+			diagnostic:     "",
+		}, nil
 	}
 
 	// XXX - should we be checking the whole network?
 	result := db.Lookup(network.Addr())
 
-	var mostSpecificSubdivision string
-	err = result.DecodePath(&mostSpecificSubdivision, "subdivisions", -1, "iso_code")
-	if err != nil {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf(
-				"unable to find city record for %s: %s",
-				networkOrIP,
-				err,
-			),
-		}
+	// A record present for this network always decodes cleanly (a missing
+	// record yields a nil error and a zero-valued struct, per
+	// Result.Decode), so an error here means the database itself is
+	// unusable, not that the row is invalid -- that's why this returns an
+	// error instead of a verificationResult.
+	var cityRecord struct {
+		Subdivisions []struct {
+			ISOCode string `maxminddb:"iso_code"`
+		} `maxminddb:"subdivisions"`
+		Country struct {
+			ISOCode string `maxminddb:"iso_code"`
+		} `maxminddb:"country"`
+		City struct {
+			Names struct {
+				English string `maxminddb:"en"`
+			} `maxminddb:"names"`
+		} `maxminddb:"city"`
+		Postal struct {
+			Code string `maxminddb:"code"`
+		} `maxminddb:"postal"`
 	}
-
-	var countryCode string
-	err = result.DecodePath(&countryCode, "country", "iso_code")
-	if err != nil {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf(
-				"unable to find city record for %s: %s",
-				networkOrIP,
-				err,
-			),
-		}
+	if err := result.Decode(&cityRecord); err != nil {
+		return "", verificationResult{}, fmt.Errorf(
+			"decoding city database record for %s: %w: %w",
+			networkOrIP,
+			ErrDatabaseLookup,
+			err,
+		)
 	}
+	countryCode := cityRecord.Country.ISOCode
+	cityName := cityRecord.City.Names.English
+	postalCode := cityRecord.Postal.Code
 
-	var cityName string
-	err = result.DecodePath(&cityName, "city", "names", "en")
-	if err != nil {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf(
-				"unable to find city record for %s: %s",
-				networkOrIP,
-				err,
-			),
-		}
-	}
-
-	var postalCode string
-	err = result.DecodePath(&postalCode, "postal", "code")
-	if err != nil {
-		return "", verificationResult{
-			valid:          false,
-			invalidityType: UnableToFindCityRecord,
-			invalidityReason: fmt.Sprintf(
-				"unable to find city record for %s: %s",
-				networkOrIP,
-				err,
-			),
-		}
+	// Subdivisions run least to most specific, so the last entry is the
+	// most specific one. A record with no subdivisions leaves this empty.
+	mostSpecificSubdivision := ""
+	if n := len(cityRecord.Subdivisions); n > 0 {
+		mostSpecificSubdivision = cityRecord.Subdivisions[n-1].ISOCode
 	}
 
 	// ISO-3166-2 region codes are prefixed with the ISO country code,
@@ -331,7 +516,7 @@ func verifyCorrection(
 	if strings.Contains(correction[2], "-") {
 		mostSpecificSubdivision = countryCode + "-" + mostSpecificSubdivision
 	} else if correction[2] != "" && !opts.LaxMode {
-		return "", invalidRegionCodeResult(correction)
+		return "", invalidRegionCodeResult(correction), nil
 	}
 
 	asNumber := uint(0)
@@ -344,17 +529,16 @@ func verifyCorrection(
 			ISP                          string `maxminddb:"isp"`
 		}
 		// XXX - should we be checking the whole network?
-		err := ispdb.Lookup(network.Addr()).Decode(&ispRecord)
-		if err != nil {
-			return "", verificationResult{
-				valid:          false,
-				invalidityType: UnableToFindISPRecord,
-				invalidityReason: fmt.Sprintf(
-					"unable to find ISP record for %s: %s",
-					networkOrIP,
-					err,
-				),
-			}
+		// A missing record decodes cleanly to ispRecord's zero value, as
+		// with the city record above; an error here means the ISP
+		// database itself is unusable.
+		if err := ispdb.Lookup(network.Addr()).Decode(&ispRecord); err != nil {
+			return "", verificationResult{}, fmt.Errorf(
+				"decoding ISP database record for %s: %w: %w",
+				networkOrIP,
+				ErrDatabaseLookup,
+				err,
+			)
 		}
 		asNumber = ispRecord.AutonomousSystemNumber
 		asName = ispRecord.AutonomousSystemOrganization
@@ -409,7 +593,7 @@ func verifyCorrection(
 	}
 
 	// if no postal code is provided in the correction, do not report on any
-	// differences; postal codes are frequently omitted, and as of 2020-08-01 are
+	// differences; postal codes are frequently omitted, and as of 2020-08-01
 	// the postal code field is considered deprecated in RFC 8805
 	if correction[4] != "" && !(strings.EqualFold(correction[4], postalCode)) {
 		foundDiff = true
@@ -448,14 +632,14 @@ func verifyCorrection(
 		}
 
 		return strings.Join(lines, "\n"+indent), verificationResult{
-			valid:            true,
-			invalidityType:   RowInvalidity(-1),
-			invalidityReason: "",
-		}
+			valid:          true,
+			invalidityType: UnknownInvalidity,
+			diagnostic:     "",
+		}, nil
 	}
 	return "", verificationResult{
-		valid:            true,
-		invalidityType:   RowInvalidity(-1),
-		invalidityReason: "",
-	}
+		valid:          true,
+		invalidityType: UnknownInvalidity,
+		diagnostic:     "",
+	}, nil
 }

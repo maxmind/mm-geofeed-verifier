@@ -1,5 +1,54 @@
 ## CHANGELOG
 
+## 5.0.0 - TBD
+
+- Breaking: `CheckResult.SampleInvalidRows` is now
+  `map[RowInvalidity]InvalidRow` rather than `map[RowInvalidity]string`. The
+  preformatted sample strings are gone; the same information is available as
+  data on `InvalidRow`: `Line`, `Type`, `Fields` (the row's own fields, not a
+  rejoined string), a curated and display-safe `Reason`, and internal
+  engineer-facing `Diagnostic` text. `InvalidRow.String()` renders
+  `line <Line>: <Diagnostic>`, which resembles the old string but reports the
+  row's line in the file, counting comment lines, where the old string counted
+  only data rows.
+- Breaking: `UnableToFindCityRecord` and `UnableToFindISPRecord` are removed. A
+  database that can't be opened, or a lookup against it that fails, is a problem
+  with the database, not with the geofeed, so `ProcessGeofeed` now returns an
+  error wrapping the new `ErrDatabaseLookup` rather than recording the row as
+  invalid. Consumers should treat it as operational and leave the geofeed's
+  state unchanged.
+- Breaking: the module path is now `github.com/maxmind/mm-geofeed-verifier/v5`.
+  Update imports accordingly.
+- Breaking: `ProcessGeofeed` returns `(Result, error)`. `Result` replaces
+  `CheckResult` and absorbs the diff lines and ASN counts that used to be
+  separate return values, as `Diffs` and `ASNCounts`. `NewCheckResult` is
+  removed; `ProcessGeofeed` is the only thing that builds a `Result`.
+- Breaking: a geofeed that fails verification is no longer reported as an error.
+  `Result.Failure` names the reason -- `FailureNotUTF8`, `FailureEmpty`,
+  `FailureInvalidRows` or `FailureUnreadableCSV` -- and is `FailureNone` when
+  the geofeed passed. `ProcessGeofeed` returns a non-nil error only when
+  verification could not be performed at all: the file was unreadable, or an
+  MMDB was unusable (`ErrDatabaseLookup`). So `ErrNotUTF8`, `ErrEmptyGeofeed`
+  and `ErrInvalidGeofeed` are removed. A file that cannot be parsed as CSV,
+  which previously produced an error carrying no sentinel at all and so was
+  indistinguishable from an operational fault, is now `FailureUnreadableCSV`.
+- `Result.FailureDiagnostic` carries internal, engineer-facing text about
+  `Result.Failure`, in the same spirit as `InvalidRow.Diagnostic`: unstable, not
+  to be parsed, and not to be shown to a geofeed's owner. It reports where the
+  CSV parser gave up for a `FailureUnreadableCSV`, and is empty for the failure
+  reasons that have no particulars to add. It honors
+  `Options.HideFilePathsInErrorMessages`.
+- `FailureReason.Description` returns a plain sentence naming the failure, safe
+  to show someone who is not an engineer, where `String` returns the constant's
+  own name. The wording is a default rather than a contract: it can change, so
+  it must not be parsed. The command-line program reports it instead of the
+  constant name, and appends `Result.FailureDiagnostic` when set, so an
+  unparseable geofeed again names the line and column the parser gave up at.
+- Breaking: lines holding only whitespace are skipped, as comment lines already
+  are. Previously such a line parsed as a single empty field, counted toward
+  `Result.Total`, and was reported as a `FewerFieldsThanExpected` invalid row
+  whose `Fields` held one empty string.
+
 ## 4.0.0 (2026-02-16)
 
 - Require that geofeeds be encoded as valid UTF-8.

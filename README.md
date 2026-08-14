@@ -58,7 +58,7 @@ You need the Go compiler (Go 1.25+). You can get it at the
 
 The easiest way is via `go install`:
 
-    $ go install github.com/maxmind/mm-geofeed-verifier/v4@latest
+    $ go install github.com/maxmind/mm-geofeed-verifier/v5@latest
 
 The program will be installed to `$GOPATH/bin/mm-geofeed-verifier`.
 

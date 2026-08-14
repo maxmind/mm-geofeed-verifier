@@ -15,11 +15,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"slices"
 	"strings"
 
-	"github.com/maxmind/mm-geofeed-verifier/v4/verify"
+	"github.com/maxmind/mm-geofeed-verifier/v5/verify"
 )
 
 // This value is set by build scripts. Changing the name of
@@ -35,14 +36,18 @@ type config struct {
 }
 
 func main() {
-	err := run()
+	err := run(os.Args[0], os.Args[1:])
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run() error {
-	conf, output, err := parseFlags(os.Args[0], os.Args[1:])
+// run takes the program name and arguments rather than reading os.Args so a
+// test can drive it end to end. Whether a failure is reported as the
+// database's or the geofeed's is the distinction most worth pinning, and it is
+// only observable from here.
+func run(program string, args []string) error {
+	conf, output, err := parseFlags(program, args)
 	if err != nil {
 		fmt.Println(output)
 		return err
@@ -52,57 +57,96 @@ func run() error {
 		fmt.Fprintln(os.Stderr, "-isp is ignored without -db")
 	}
 
-	c, diffLines, asnCounts, err := verify.ProcessGeofeed(
+	res, err := verify.ProcessGeofeed(
 		conf.gf,
 		conf.db,
 		conf.isp,
 		verify.Options{LaxMode: conf.laxMode, EmptyOK: conf.emptyOK},
 	)
 	if err != nil {
-		if errors.Is(err, verify.ErrInvalidGeofeed) {
-			log.Printf(
-				"Found %d invalid rows out of %d rows in total, examples by type:",
-				c.Invalid,
-				c.Total,
-			)
-			for invType, invMessage := range c.SampleInvalidRows {
-				log.Printf("%s: '%s'", invType, invMessage)
-			}
+		if errors.Is(err, verify.ErrDatabaseLookup) {
+			// Name the fault plainly: it's the MMDB, not the geofeed, so
+			// this must not read like "unable to process geofeed", which
+			// would tell someone their file is bad when it's our database.
+			return fmt.Errorf("MMDB unavailable while verifying %s: %w", conf.gf, err)
 		}
 		return fmt.Errorf("unable to process geofeed %s: %w", conf.gf, err)
+	}
+
+	if res.Failure != verify.FailureNone {
+		if res.Failure == verify.FailureInvalidRows {
+			log.Printf(
+				"Found %d invalid rows out of %d rows in total, examples by type:",
+				res.Invalid,
+				res.Total,
+			)
+			for _, line := range formatInvalidRows(res.SampleInvalidRows) {
+				log.Print(line)
+			}
+		}
+		// FailureDiagnostic is set only for FailureUnreadableCSV, where no row
+		// was produced and the parser's line and column are the only record
+		// of where the trouble is. Every other failure describes itself
+		// through the lines above, so nothing is repeated here.
+		if res.FailureDiagnostic != "" {
+			return fmt.Errorf(
+				"geofeed %s failed verification: %s (%s)",
+				conf.gf,
+				res.Failure.Description(),
+				res.FailureDiagnostic,
+			)
+		}
+		return fmt.Errorf(
+			"geofeed %s failed verification: %s",
+			conf.gf,
+			res.Failure.Description(),
+		)
 	}
 
 	if conf.db == "" {
 		fmt.Printf(
 			"Validated %d rows. No MMDB provided (-db), so comparison was skipped.\n",
-			c.Total,
+			res.Total,
 		)
 		return nil
 	}
 
 	fmt.Printf(
-		strings.Join(diffLines, "\n\n")+
+		strings.Join(res.Diffs, "\n\n")+
 			"\n\nOut of %d potential corrections, %d may be different than our current mappings\n\n",
-		c.Total,
-		c.Differences,
+		res.Total,
+		res.Differences,
 	)
 
 	// https://stackoverflow.com/questions/18695346/how-can-i-sort-a-mapstringint-by-its-values/56706305#56706305
-	asNumbers := make([]uint, 0, len(asnCounts))
-	for asNumber := range asnCounts {
+	asNumbers := make([]uint, 0, len(res.ASNCounts))
+	for asNumber := range res.ASNCounts {
 		asNumbers = append(asNumbers, asNumber)
 	}
 	slices.SortFunc(
 		asNumbers,
 		func(a, b uint) int {
-			return cmp.Compare(asnCounts[b], asnCounts[a])
+			return cmp.Compare(res.ASNCounts[b], res.ASNCounts[a])
 		},
 	)
 	for _, asNumber := range asNumbers {
-		fmt.Printf("ASN: %d, count: %d\n", asNumber, asnCounts[asNumber])
+		fmt.Printf("ASN: %d, count: %d\n", asNumber, res.ASNCounts[asNumber])
 	}
 
 	return nil
+}
+
+// formatInvalidRows renders one line per sample invalid row, sorted by
+// invalidity type so CLI output order is deterministic. row's own
+// String() already ends with the offending row's diagnostic text (and,
+// for the too-few-fields case, a trailing "row: '...'"), so this does not
+// quote it again -- doing so would double the quotes in that case.
+func formatInvalidRows(rows map[verify.RowInvalidity]verify.InvalidRow) []string {
+	lines := make([]string, 0, len(rows))
+	for _, t := range slices.Sorted(maps.Keys(rows)) {
+		lines = append(lines, fmt.Sprintf("%s: %s", t, rows[t]))
+	}
+	return lines
 }
 
 func parseFlags(program string, args []string) (c *config, output string, err error) {
