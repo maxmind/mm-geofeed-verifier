@@ -16,11 +16,12 @@
   - Mention recent changes if needed.
 - Commit these changes.
 - Run `dev-bin/release.sh`.
+  - The script pushes the branch, then pushes an annotated tag with the release
+    notes from `CHANGELOG.md`.
+- The tag push starts the Release workflow. An authorized releaser must approve
+  the pending deployment. GoReleaser then uploads the binaries to a draft
+  release and publishes it with the notes from the tag.
 - Verify the release on the GitHub Releases page.
-- If everything goes well, the authorized releasers will receive an email to
-  review the pending deployment. If you are an authorized releaser, you will
-  need to approve the release deployment run. If you are not, you will have to
-  wait for an authorized releaser to do so.
 - Make a PR and get it merged.
 
 NOTE: if a major version release is happening, it's necessary to update the
