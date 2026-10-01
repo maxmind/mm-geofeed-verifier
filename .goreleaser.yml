@@ -19,4 +19,4 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 release:
-  target_commitish: "{{ .FullCommit }}"
+  name_template: "{{.Version}}"
