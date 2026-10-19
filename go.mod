@@ -3,7 +3,7 @@ module github.com/maxmind/mm-geofeed-verifier/v5
 go 1.26.0
 
 require (
-	github.com/oschwald/maxminddb-golang/v2 v2.7.0
+	github.com/oschwald/maxminddb-golang/v2 v2.8.0
 	github.com/stretchr/testify v1.12.1
 )
 
