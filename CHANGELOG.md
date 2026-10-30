@@ -48,6 +48,18 @@
   are. Previously such a line parsed as a single empty field, counted toward
   `Result.Total`, and was reported as a `FewerFieldsThanExpected` invalid row
   whose `Fields` held one empty string.
+- Breaking: the command-line program's `-db` flag now defaults to an empty
+  string rather than `/usr/local/share/GeoIP/GeoIP2-City.mmdb`, and `-db` is no
+  longer required. Without `-db`, the program only validates the geofeed's
+  format and prints how many rows it validated. Scripts that relied on the old
+  default path must now pass `-db`. If `-isp` is given without `-db`, the
+  program prints a notice that `-isp` is ignored.
+- The City and ISP databases are now optional in `ProcessGeofeed`. When the MMDB
+  filename is empty, it opens no database and checks only the geofeed's format,
+  returning empty diff lines and ASN counts. A non-empty filename that cannot be
+  opened is still an error.
+- Breaking: the minimum supported Go version is now 1.26. Version 4 required Go
+  1.24.
 
 ## 4.0.0 (2026-02-16)
 
