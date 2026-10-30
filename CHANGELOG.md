@@ -2,6 +2,14 @@
 
 ## 5.0.0 - TBD
 
+- Updated `github.com/oschwald/maxminddb-golang/v2` from v2.1.0 to v2.9.0. This
+  fixes a denial of service from a crafted database,
+  [GHSA-hj94-g986-h9r7](https://github.com/maxmind/MaxMind-DB-Reader-python/security/advisories/GHSA-hj94-g986-h9r7).
+- The release binaries are built with the current Go release. The 3.1.0 binaries
+  used Go 1.23.2, which has known standard-library vulnerabilities. Version
+  4.0.0 had no binaries.
+- The macOS binaries now require macOS 13 Ventura or later, and the Linux
+  binaries require Linux kernel 3.2 or later.
 - Breaking: `CheckResult.SampleInvalidRows` is now
   `map[RowInvalidity]InvalidRow` rather than `map[RowInvalidity]string`. The
   preformatted sample strings are gone; the same information is available as
@@ -17,6 +25,10 @@
   error wrapping the new `ErrDatabaseLookup` rather than recording the row as
   invalid. Consumers should treat it as operational and leave the geofeed's
   state unchanged.
+- Breaking: the `RowInvalidity` values are renumbered. The new
+  `UnknownInvalidity` is the zero value, and the removal of
+  `UnableToFindCityRecord` and `UnableToFindISPRecord` moves
+  `InvalidRegionCode`. Code that stores the integer values must convert them.
 - Breaking: the module path is now `github.com/maxmind/mm-geofeed-verifier/v5`.
   Update imports accordingly.
 - Breaking: `ProcessGeofeed` returns `(Result, error)`. `Result` replaces
@@ -51,6 +63,19 @@
 - Fix: the command-line program no longer garbles its diff output when a geofeed
   field, such as a city, region or postal code, contains a `%`. The diff text is
   now printed as it is.
+- Breaking: the command-line program's `-db` flag now defaults to an empty
+  string rather than `/usr/local/share/GeoIP/GeoIP2-City.mmdb`, and `-db` is no
+  longer required. Without `-db`, the program only validates the geofeed's
+  format and prints how many rows it validated. Scripts that relied on the old
+  default path must now pass `-db`. If `-isp` is given without `-db`, the
+  program prints a notice that `-isp` is ignored.
+- The City database is now optional in `ProcessGeofeed`, as the ISP database
+  already was. When the City database filename is empty, `ProcessGeofeed` opens
+  no database, ignores the ISP database, and checks only the geofeed's format.
+  `Result.Diffs` and `Result.ASNCounts` are then empty. A non-empty filename
+  that cannot be opened is still an error.
+- Breaking: the minimum supported Go version is now 1.26. Version 4 required Go
+  1.24.
 
 ## 4.0.0 (2026-02-16)
 
