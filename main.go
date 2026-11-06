@@ -112,8 +112,8 @@ func run(program string, args []string) error {
 	}
 
 	fmt.Printf(
-		strings.Join(res.Diffs, "\n\n")+
-			"\n\nOut of %d potential corrections, %d may be different than our current mappings\n\n",
+		"%s\n\nOut of %d potential corrections, %d may be different than our current mappings\n\n",
+		strings.Join(res.Diffs, "\n\n"),
 		res.Total,
 		res.Differences,
 	)

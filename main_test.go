@@ -2,6 +2,9 @@ package main
 
 import (
 	"flag"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -239,4 +242,53 @@ func TestRun(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRunPrintsDiffLinesLiterally checks that a "%" in a geofeed field
+// reaches the output unchanged instead of being read as a format verb.
+func TestRunPrintsDiffLinesLiterally(t *testing.T) {
+	const city = "100%d Springs"
+	feed := filepath.Join(t.TempDir(), "geofeed.csv")
+	require.NoError(
+		t,
+		os.WriteFile(feed, []byte("2.125.160.216/29,GB,GB-WBK,"+city+",\n"), 0o600),
+	)
+
+	out := captureStdout(t, func() {
+		require.NoError(t, run("mm-geofeed-verifier", []string{
+			"-gf", feed,
+			"-db", "verify/testdata/GeoIP2-City-Test.mmdb",
+		}))
+	})
+
+	assert.Contains(t, out, city)
+	assert.NotContains(t, out, "%!")
+}
+
+func captureStdout(t *testing.T, f func()) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	orig := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	// Drain concurrently so output larger than the pipe buffer cannot block.
+	type readResult struct {
+		b   []byte
+		err error
+	}
+	done := make(chan readResult)
+	go func() {
+		b, err := io.ReadAll(r)
+		done <- readResult{b, err}
+	}()
+
+	f()
+
+	require.NoError(t, w.Close())
+	res := <-done
+	require.NoError(t, res.err)
+	return string(res.b)
 }

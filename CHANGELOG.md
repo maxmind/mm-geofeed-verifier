@@ -48,6 +48,9 @@
   are. Previously such a line parsed as a single empty field, counted toward
   `Result.Total`, and was reported as a `FewerFieldsThanExpected` invalid row
   whose `Fields` held one empty string.
+- Fix: the command-line program no longer garbles its diff output when a geofeed
+  field, such as a city, region or postal code, contains a `%`. The diff text is
+  now printed as it is.
 
 ## 4.0.0 (2026-02-16)
 
