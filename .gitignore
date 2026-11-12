@@ -1,3 +1,4 @@
 *.swp
 /mm-geofeed-verifier
 .lycheecache
+/dist
