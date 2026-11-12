@@ -731,7 +731,7 @@ formatters:
         - prefix(github.com/maxmind/mm-geofeed-verifier)
 
     gofumpt:
-      module-path: github.com/maxmind/mm-geofeed-verifier
+      module-path: github.com/maxmind/mm-geofeed-verifier/v5
       extra:
         group-params: true
         clothe-returns: true
