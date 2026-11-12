@@ -438,7 +438,7 @@ func verifyCorrection(
 			reason: "The network field is empty.",
 		}, nil
 	}
-	if !(strings.Contains(networkOrIP, "/")) {
+	if !strings.Contains(networkOrIP, "/") {
 		if strings.Contains(networkOrIP, ":") {
 			networkOrIP += "/64"
 		} else {
@@ -553,7 +553,7 @@ func verifyCorrection(
 	foundDiff := false
 	lines := []string{fmt.Sprintf("\nFound a potential improvement: '%s'", networkOrIP)}
 
-	if !(strings.EqualFold(correction[1], countryCode)) {
+	if !strings.EqualFold(correction[1], countryCode) {
 		foundDiff = true
 		lines = append(
 			lines,
@@ -566,7 +566,7 @@ func verifyCorrection(
 		)
 	}
 
-	if !(strings.EqualFold(correction[2], mostSpecificSubdivision)) {
+	if !strings.EqualFold(correction[2], mostSpecificSubdivision) {
 		foundDiff = true
 		lines = append(
 			lines,
@@ -579,7 +579,7 @@ func verifyCorrection(
 		)
 	}
 
-	if !(strings.EqualFold(correction[3], cityName)) {
+	if !strings.EqualFold(correction[3], cityName) {
 		foundDiff = true
 		lines = append(
 			lines,
@@ -595,7 +595,7 @@ func verifyCorrection(
 	// if no postal code is provided in the correction, do not report on any
 	// differences; postal codes are frequently omitted, and as of 2020-08-01
 	// the postal code field is considered deprecated in RFC 8805
-	if correction[4] != "" && !(strings.EqualFold(correction[4], postalCode)) {
+	if correction[4] != "" && !strings.EqualFold(correction[4], postalCode) {
 		foundDiff = true
 		lines = append(
 			lines,
