@@ -1,6 +1,8 @@
 version: 2
 builds:
   - id: 'mm-geofeed-verifier'
+    env:
+      - CGO_ENABLED=0
     main: '.'
     goos:
       - darwin

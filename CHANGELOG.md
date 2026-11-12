@@ -10,6 +10,8 @@
   4.0.0 had no binaries.
 - The macOS binaries now require macOS 13 Ventura or later, and the Linux
   binaries require Linux kernel 3.2 or later.
+- The Linux amd64 binary is now statically linked. The 3.1.0 binary required
+  glibc 2.34 or later.
 - Breaking: `CheckResult.SampleInvalidRows` is now
   `map[RowInvalidity]InvalidRow` rather than `map[RowInvalidity]string`. The
   preformatted sample strings are gone; the same information is available as
